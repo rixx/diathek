@@ -805,16 +805,13 @@ def place_autocomplete(request):
 
 def _annotated_places():
     return Place.objects.annotate(image_count=Count("images")).order_by(
-        Case(When(latitude__isnull=True, then=0), default=1),
-        "name",
+        Case(When(latitude__isnull=True, then=0), default=1), "name"
     )
 
 
 @login_required
 def place_list(request):
-    return render(
-        request, "core/place_list.html", {"places": _annotated_places()}
-    )
+    return render(request, "core/place_list.html", {"places": _annotated_places()})
 
 
 @login_required
@@ -836,9 +833,7 @@ def place_set_coords(request, pk):
                 place.longitude = lng
                 place.save(user=request.user)
     place.image_count = place.images.count()
-    return render(
-        request, "core/_place_row.html", {"place": place, "error": error}
-    )
+    return render(request, "core/_place_row.html", {"place": place, "error": error})
 
 
 @login_required

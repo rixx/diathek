@@ -4,7 +4,6 @@ import pytest
 
 from diathek.metadata.coords import parse_coordinates
 
-
 GOOGLE_URL = (
     "https://www.google.com/maps/place/"
     "49%C2%B032'47.3%22N+8%C2%B038'26.9%22E/"
@@ -23,19 +22,13 @@ def test_returns_none_for_garbage():
 
 
 def test_prefers_pin_coordinates_over_map_centre():
-    assert parse_coordinates(GOOGLE_URL) == (
-        Decimal("49.546473"),
-        Decimal("8.640815"),
-    )
+    assert parse_coordinates(GOOGLE_URL) == (Decimal("49.546473"), Decimal("8.640815"))
 
 
 def test_falls_back_to_at_centre_when_no_pin():
     url = "https://www.google.com/maps/@49.546478,8.6382401,17z/"
 
-    assert parse_coordinates(url) == (
-        Decimal("49.546478"),
-        Decimal("8.638240"),
-    )
+    assert parse_coordinates(url) == (Decimal("49.546478"), Decimal("8.638240"))
 
 
 def test_accepts_plain_comma_pair():
@@ -90,12 +83,7 @@ def test_quantizes_to_six_decimal_places():
 
 
 @pytest.mark.parametrize(
-    "text",
-    [
-        "lat=49,lng=8",
-        "49 degrees north",
-        "not/coords/!3dabc!4def",
-    ],
+    "text", (("lat=49,lng=8",), ("49 degrees north",), ("not/coords/!3dabc!4def",))
 )
 def test_returns_none_for_unparseable_inputs(text):
     assert parse_coordinates(text) is None

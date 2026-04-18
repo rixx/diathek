@@ -1,13 +1,13 @@
-<li id="place-{{ place.pk }}" class="place-row{% if not place.has_coords %} place-row--missing{% endif %}">
+{% load l10n %}<li id="place-{{ place.pk }}" class="place-row{% if not place.has_coords %} place-row--missing{% endif %}">
     <div class="place-row-head">
         <h2>{{ place.name }}</h2>
         <small>{{ place.image_count }} Bild{{ place.image_count|pluralize:"er" }}</small>
     </div>
     <div class="place-row-coords">
         {% if place.has_coords %}
-        <span class="place-coords">{{ place.latitude }}, {{ place.longitude }}</span>
+        <span class="place-coords">{{ place.latitude|unlocalize }}, {{ place.longitude|unlocalize }}</span>
         <a class="place-coords-link"
-           href="https://www.google.com/maps/?q={{ place.latitude }},{{ place.longitude }}"
+           href="https://www.google.com/maps/?q={{ place.latitude|unlocalize }},{{ place.longitude|unlocalize }}"
            target="_blank"
            rel="noopener noreferrer">Auf Karte zeigen &rarr;</a>
         {% else %}

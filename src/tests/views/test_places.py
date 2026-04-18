@@ -96,8 +96,7 @@ def test_set_coords_extracts_from_google_url(auth_client):
     place = PlaceFactory(name="Weinheim")
 
     response = auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": GOOGLE_URL},
+        reverse("place_set_coords", args=[place.pk]), {"raw": GOOGLE_URL}
     )
 
     assert response.status_code == 200
@@ -111,8 +110,7 @@ def test_set_coords_accepts_plain_pair(auth_client):
     place = PlaceFactory(name="Hof")
 
     response = auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "48.123456, 11.654321"},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "48.123456, 11.654321"}
     )
 
     place.refresh_from_db()
@@ -126,14 +124,14 @@ def test_set_coords_returns_row_fragment(auth_client):
     place = PlaceFactory(name="Weinheim")
 
     response = auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "48.0, 11.0"},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "47.123456, 12.654321"}
     )
 
     content = response.content.decode()
     assert content.lstrip().startswith("<li")
     assert f'id="place-{place.pk}"' in content
-    assert "48.000000" in content
+    assert "47.123456" in content
+    assert "12.654321" in content
 
 
 @pytest.mark.django_db
@@ -141,8 +139,7 @@ def test_set_coords_rejects_unparseable_input(auth_client):
     place = PlaceFactory(name="Weinheim")
 
     response = auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "nonsense"},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "nonsense"}
     )
 
     place.refresh_from_db()
@@ -156,8 +153,7 @@ def test_set_coords_rejects_empty_input(auth_client):
     place = PlaceFactory(name="Weinheim")
 
     response = auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "   "},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "   "}
     )
 
     assert response.status_code == 200
@@ -169,8 +165,7 @@ def test_set_coords_requires_login(client):
     place = PlaceFactory(name="Weinheim")
 
     response = client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "48.0, 11.0"},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "48.0, 11.0"}
     )
 
     assert response.status_code == 302
@@ -197,8 +192,7 @@ def test_set_coords_is_noop_when_values_unchanged(auth_client):
     original_version = place.updated_at
 
     response = auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "48.0, 11.0"},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "48.0, 11.0"}
     )
 
     place.refresh_from_db()
@@ -213,8 +207,7 @@ def test_set_coords_writes_audit_log_on_change(auth_client):
     place = PlaceFactory(name="Weinheim")
 
     auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": "48.0, 11.0"},
+        reverse("place_set_coords", args=[place.pk]), {"raw": "48.0, 11.0"}
     )
 
     entries = AuditLog.objects.filter(action_type="place.change")
@@ -228,8 +221,7 @@ def test_set_coords_writes_audit_log_on_change(auth_client):
 @pytest.mark.django_db
 def test_set_coords_404_for_unknown_place(auth_client):
     response = auth_client.post(
-        reverse("place_set_coords", args=[9999]),
-        {"raw": "48.0, 11.0"},
+        reverse("place_set_coords", args=[9999]), {"raw": "48.0, 11.0"}
     )
 
     assert response.status_code == 404
@@ -252,9 +244,6 @@ def test_place_list_shows_map_link_when_coords_present(auth_client):
 def test_place_object_reflects_saved_coords(auth_client):
     place = PlaceFactory(name="Weinheim")
 
-    auth_client.post(
-        reverse("place_set_coords", args=[place.pk]),
-        {"raw": GOOGLE_URL},
-    )
+    auth_client.post(reverse("place_set_coords", args=[place.pk]), {"raw": GOOGLE_URL})
 
     assert Place.objects.get(pk=place.pk).has_coords

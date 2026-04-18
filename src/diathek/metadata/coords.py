@@ -8,13 +8,11 @@ accept a bare ``lat, lng`` pair so users can type coordinates directly.
 from __future__ import annotations
 
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 PIN_RE = re.compile(r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)")
 AT_RE = re.compile(r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)")
-PAIR_RE = re.compile(
-    r"^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$",
-)
+PAIR_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$")
 
 
 def parse_coordinates(text: str) -> tuple[Decimal, Decimal] | None:
@@ -44,11 +42,8 @@ def parse_coordinates(text: str) -> tuple[Decimal, Decimal] | None:
 
 
 def _to_decimals(lat_raw: str, lng_raw: str) -> tuple[Decimal, Decimal] | None:
-    try:
-        lat = Decimal(lat_raw)
-        lng = Decimal(lng_raw)
-    except InvalidOperation:
-        return None
+    lat = Decimal(lat_raw)
+    lng = Decimal(lng_raw)
     if not (-90 <= lat <= 90 and -180 <= lng <= 180):
         return None
     return lat.quantize(Decimal("0.000001")), lng.quantize(Decimal("0.000001"))
