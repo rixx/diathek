@@ -122,6 +122,12 @@ h1, h2, h3 {
     transform: rotate(45deg);
     display: inline-block;
 }
+.site-nav-deploy {
+    margin-left: auto;
+}
+.site-nav-deploy + .site-nav-user {
+    margin-left: var(--space-lg);
+}
 .site-nav-user {
     margin-left: auto;
     font-size: 0.85rem;

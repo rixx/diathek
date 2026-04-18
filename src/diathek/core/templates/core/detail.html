@@ -962,13 +962,20 @@
     }
 
     function applyWord(input, word) {
-        const value = input.value;
-        const match = value.match(/([\wäöüÄÖÜ]+)$/);
+        const pos = input.selectionStart ?? input.value.length;
+        const before = input.value.slice(0, pos);
+        const after = input.value.slice(pos);
+        const match = before.match(/([\wäöüÄÖÜ]+)$/);
+        let newBefore;
         if (match) {
-            input.value = value.slice(0, value.length - match[1].length) + word;
+            newBefore = before.slice(0, before.length - match[1].length) + word;
         } else {
-            input.value = (value ? value + " " : "") + word;
+            const needsSpace = before.length > 0 && !/\s$/.test(before);
+            newBefore = before + (needsSpace ? " " : "") + word;
         }
+        input.value = newBefore + after;
+        const caret = newBefore.length;
+        input.setSelectionRange(caret, caret);
         hideSuggestions(input);
         input.focus();
         fetchState(input);

@@ -83,7 +83,7 @@ def test_quantizes_to_six_decimal_places():
 
 
 @pytest.mark.parametrize(
-    "text", (("lat=49,lng=8",), ("49 degrees north",), ("not/coords/!3dabc!4def",))
+    "text", ("lat=49,lng=8", "49 degrees north", "not/coords/!3dabc!4def")
 )
 def test_returns_none_for_unparseable_inputs(text):
     assert parse_coordinates(text) is None

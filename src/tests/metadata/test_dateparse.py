@@ -280,11 +280,17 @@ def test_case_and_whitespace_variants_produce_identical_parse(text):
     assert _triple(result) == (D(1987, 6, 1), D(1987, 6, 30), "month")
 
 
-def test_display_is_preserved_verbatim_including_case_and_spaces():
-    original = "  Jun  1987  "
-    result = parse(original)
-
-    assert result.display == original
+def test_display_standardises_whitespace_and_expands_two_digit_years():
+    assert parse("  Jun  1987  ").display == "Jun 1987"
+    assert parse("88").display == "1988"
+    assert parse("sommer 87").display == "sommer 1987"
+    assert parse("Sommer 87").display == "Sommer 1987"
+    assert parse("späte 80er").display == "späte 1980er"
+    assert parse("85-88").display == "1985-1988"
+    assert parse("ca. 87").display == "ca. 1987"
+    assert parse("jun 87").display == "jun 1987"
+    assert parse("6/87").display == "6/1987"
+    assert parse("2001 bis 05").display == "2001 bis 2005"
 
 
 def test_deterministic_triple_across_equivalent_inputs():

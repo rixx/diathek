@@ -39,6 +39,10 @@ def _staff_required(view):
     return user_passes_test(lambda u: u.is_active and u.is_staff)(view)
 
 
+def _superuser_required(view):
+    return user_passes_test(lambda u: u.is_active and u.is_superuser)(view)
+
+
 def register(request, code):
     invite = get_object_or_404(InviteCode, code=code)
     if not invite.is_valid:
@@ -80,7 +84,6 @@ def index(request):
             "archived_boxes": archived_boxes,
             "collections": collections,
             "unsorted_count": unsorted_count,
-            "deploy_enabled": bool(getattr(settings, "DEPLOY_FLAG_FILE", "")),
         },
     )
 
@@ -210,6 +213,68 @@ def import_view(request):
 
 class _ImportError(Exception):
     """Raised inside the import transaction to trigger rollback with a message."""
+
+
+@login_required
+@_staff_required
+@require_POST
+def api_upload(request):
+    files = request.FILES.getlist("files")
+    if not files:
+        return JsonResponse({"error": "Keine Dateien angegeben."}, status=400)
+
+    filenames = [f.name for f in files]
+    duplicates = sorted({n for n in filenames if filenames.count(n) > 1})
+    if duplicates:
+        return JsonResponse(
+            {"error": "Doppelte Dateinamen im Upload: " + ", ".join(duplicates)},
+            status=400,
+        )
+
+    ordered = sorted(files, key=lambda f: f.name)
+    created = []
+    skipped_hash = []
+
+    try:
+        with transaction.atomic():
+            for uploaded in ordered:
+                raw = uploaded.read()
+                try:
+                    assets = build_assets(raw)
+                except (UnidentifiedImageError, OSError):
+                    raise _ImportError(
+                        f"Datei {uploaded.name} ist kein gültiges Bild."
+                    ) from None
+
+                if Image.objects.filter(
+                    box__isnull=True, content_hash=assets.content_hash
+                ).exists():
+                    skipped_hash.append(uploaded.name)
+                    continue
+
+                image = Image(
+                    box=None,
+                    filename=uploaded.name,
+                    sequence_in_box=None,
+                    content_hash=assets.content_hash,
+                    file_size=assets.file_size,
+                    width=assets.width,
+                    height=assets.height,
+                )
+                _save_image_files(image, raw, uploaded.name, assets)
+                image.save(user=request.user)
+                created.append(image)
+    except _ImportError as err:
+        return JsonResponse({"error": str(err)}, status=400)
+
+    return JsonResponse(
+        {
+            "created": [
+                {"uuid": str(img.uuid), "filename": img.filename} for img in created
+            ],
+            "skipped": skipped_hash,
+        }
+    )
 
 
 @login_required
@@ -914,7 +979,7 @@ def box_archive(request, box_uuid):
 
 
 @login_required
-@_staff_required
+@_superuser_required
 @require_POST
 def trigger_deploy(request):
     flag_path = getattr(settings, "DEPLOY_FLAG_FILE", "") or ""

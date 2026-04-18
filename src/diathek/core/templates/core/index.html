@@ -8,13 +8,6 @@
     <div class="page-header-actions">
         {% if request.user.is_staff %}
         <a class="btn btn-primary" href="{% url 'import' %}">Neue Bilder hochladen</a>
-        {% if deploy_enabled %}
-        <form method="post" action="{% url 'deploy' %}" class="inline-form"
-              onsubmit="return confirm('Neue Version jetzt deployen?');">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-deploy" title="Neue Version deployen">Deploy</button>
-        </form>
-        {% endif %}
         {% endif %}
     </div>
 </header>

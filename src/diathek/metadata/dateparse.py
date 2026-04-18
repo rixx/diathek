@@ -116,45 +116,67 @@ def _end_of_month(year, month):
 def parse(text):
     if text is None:
         raise ParseError("Leerer Datumstext.")
-    display = text
     raw = text.strip()
     if raw == "":
         raise ParseError("Leerer Datumstext.")
-    norm = _collapse_whitespace(raw).lower()
+    base = _collapse_whitespace(raw)
+    norm = base.lower()
     for matcher in _MATCHERS:
-        result = matcher(norm, display)
+        result = matcher(norm, base)
         if result is not None:
             return result
     raise ParseError(f"Datum konnte nicht interpretiert werden: {text!r}")
 
 
-def _match_exact_iso(norm, display):
+def _rebuild_with_years(base, match, year_groups):
+    """Return `base` with each listed regex group replaced by its full-year form.
+
+    `year_groups` is a sequence of ``(group_index, full_year_int)``. Groups are
+    substituted in left-to-right order; non-year portions of `base` are copied
+    through unchanged so case, separators, and spelling of season/month words
+    survive the canonicalisation.
+    """
+    replacements = sorted(
+        ((match.span(i), str(v)) for i, v in year_groups), key=lambda pair: pair[0][0]
+    )
+    parts = []
+    prev = 0
+    for (start, end), value in replacements:
+        parts.append(base[prev:start])
+        parts.append(value)
+        prev = end
+    parts.append(base[prev:])
+    return "".join(parts)
+
+
+def _match_exact_iso(norm, base):
     m = _RE_EXACT_ISO.match(norm)
     if not m:
         return None
     try:
         day = datetime.date(int(m[1]), int(m[2]), int(m[3]))
     except ValueError as err:
-        raise ParseError(f"Ungültiges Datum: {display!r}") from err
-    return ParsedDate(earliest=day, latest=day, precision=EXACT, display=display)
+        raise ParseError(f"Ungültiges Datum: {base!r}") from err
+    return ParsedDate(earliest=day, latest=day, precision=EXACT, display=base)
 
 
-def _match_exact_de(norm, display):
+def _match_exact_de(norm, base):
     m = _RE_EXACT_DE.match(norm)
     if not m:
         return None
     try:
         day = datetime.date(int(m[3]), int(m[2]), int(m[1]))
     except ValueError as err:
-        raise ParseError(f"Ungültiges Datum: {display!r}") from err
-    return ParsedDate(earliest=day, latest=day, precision=EXACT, display=display)
+        raise ParseError(f"Ungültiges Datum: {base!r}") from err
+    return ParsedDate(earliest=day, latest=day, precision=EXACT, display=base)
 
 
-def _match_fuzzy_year(norm, display):
+def _match_fuzzy_year(norm, base):
     m = _RE_FUZZY.match(norm)
     if not m:
         return None
     year = _expand_year(m[1])
+    display = _rebuild_with_years(base, m, [(1, year)])
     return ParsedDate(
         earliest=datetime.date(year, 1, 1),
         latest=datetime.date(year, 12, 31),
@@ -163,7 +185,7 @@ def _match_fuzzy_year(norm, display):
     )
 
 
-def _match_season(norm, display):
+def _match_season(norm, base):
     m = _RE_SEASON.match(norm)
     if not m:
         return None
@@ -175,56 +197,62 @@ def _match_season(norm, display):
     else:
         earliest = datetime.date(year, start, 1)
         latest = _end_of_month(year, end)
+    display = _rebuild_with_years(base, m, [(2, year)])
     return ParsedDate(
         earliest=earliest, latest=latest, precision=SEASON, display=display
     )
 
 
-def _match_decade_mod(norm, display):
+def _match_decade_mod(norm, base):
     m = _RE_DECADE_MOD.match(norm)
     if not m:
         return None
     mod = _DECADE_MODS[m[1]]
-    base = (_expand_year(m[2]) // 10) * 10
-    return _decade_parsed(base, mod, display)
+    full_year = _expand_year(m[2])
+    decade_base = (full_year // 10) * 10
+    display = _rebuild_with_years(base, m, [(2, full_year)])
+    return _decade_parsed(decade_base, mod, display)
 
 
-def _match_decade(norm, display):
+def _match_decade(norm, base):
     m = _RE_DECADE.match(norm)
     if not m:
         return None
-    base = (_expand_year(m[1]) // 10) * 10
-    return _decade_parsed(base, None, display)
+    full_year = _expand_year(m[1])
+    decade_base = (full_year // 10) * 10
+    display = _rebuild_with_years(base, m, [(1, full_year)])
+    return _decade_parsed(decade_base, None, display)
 
 
-def _decade_parsed(base, mod, display):
+def _decade_parsed(base_year, mod, display):
     if mod == "early":
-        earliest = datetime.date(base, 1, 1)
-        latest = datetime.date(base + 3, 12, 31)
+        earliest = datetime.date(base_year, 1, 1)
+        latest = datetime.date(base_year + 3, 12, 31)
     elif mod == "mid":
-        earliest = datetime.date(base + 4, 1, 1)
-        latest = datetime.date(base + 6, 12, 31)
+        earliest = datetime.date(base_year + 4, 1, 1)
+        latest = datetime.date(base_year + 6, 12, 31)
     elif mod == "late":
-        earliest = datetime.date(base + 7, 1, 1)
-        latest = datetime.date(base + 9, 12, 31)
+        earliest = datetime.date(base_year + 7, 1, 1)
+        latest = datetime.date(base_year + 9, 12, 31)
     else:
-        earliest = datetime.date(base, 1, 1)
-        latest = datetime.date(base + 9, 12, 31)
+        earliest = datetime.date(base_year, 1, 1)
+        latest = datetime.date(base_year + 9, 12, 31)
     return ParsedDate(
         earliest=earliest, latest=latest, precision=DECADE, display=display
     )
 
 
-def _match_month_name(norm, display):
+def _match_month_name(norm, base):
     m = _RE_MONTH_NAME.match(norm)
     if not m:
         return None
     month = MONTHS[m[1]]
     year = _expand_year(m[2])
+    display = _rebuild_with_years(base, m, [(2, year)])
     return _month_parsed(year, month, display)
 
 
-def _match_month_iso(norm, display):
+def _match_month_iso(norm, base):
     m = _RE_MONTH_ISO.match(norm)
     if not m:
         return None
@@ -232,17 +260,18 @@ def _match_month_iso(norm, display):
     month = int(m[2])
     if not 1 <= month <= 12:
         return None
-    return _month_parsed(year, month, display)
+    return _month_parsed(year, month, base)
 
 
-def _match_month_num(norm, display):
+def _match_month_num(norm, base):
     m = _RE_MONTH_NUM.match(norm)
     if not m:
         return None
     month = int(m[1])
     if not 1 <= month <= 12:
-        raise ParseError(f"Ungültiger Monat: {display!r}")
+        raise ParseError(f"Ungültiger Monat: {base!r}")
     year = _expand_year(m[2])
+    display = _rebuild_with_years(base, m, [(2, year)])
     return _month_parsed(year, month, display)
 
 
@@ -255,14 +284,15 @@ def _month_parsed(year, month, display):
     )
 
 
-def _match_range(norm, display):
+def _match_range(norm, base):
     m = _RE_RANGE.match(norm)
     if not m:
         return None
     start = _expand_year(m[1])
     end = _expand_year(m[2], reference=start)
     if start > end:
-        raise ParseError(f"Bereich ist rückwärts: {display!r}")
+        raise ParseError(f"Bereich ist rückwärts: {base!r}")
+    display = _rebuild_with_years(base, m, [(1, start), (2, end)])
     return ParsedDate(
         earliest=datetime.date(start, 1, 1),
         latest=datetime.date(end, 12, 31),
@@ -271,11 +301,12 @@ def _match_range(norm, display):
     )
 
 
-def _match_year(norm, display):
+def _match_year(norm, base):
     m = _RE_YEAR.match(norm)
     if not m:
         return None
     year = _expand_year(m[1])
+    display = _rebuild_with_years(base, m, [(1, year)])
     return ParsedDate(
         earliest=datetime.date(year, 1, 1),
         latest=datetime.date(year, 12, 31),
