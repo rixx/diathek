@@ -12,6 +12,14 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def auth_client(client):
+    user = UserFactory(is_staff=True)
+    client.force_login(user)
+    client.user = user
+    return client
+
+
+@pytest.fixture
+def non_staff_client(client):
     user = UserFactory()
     client.force_login(user)
     client.user = user
@@ -24,6 +32,13 @@ def test_import_get_requires_login(client):
 
     assert response.status_code == 302
     assert response.url.startswith("/login/")
+
+
+@pytest.mark.django_db
+def test_import_requires_staff(non_staff_client):
+    response = non_staff_client.get(reverse("import"))
+
+    assert response.status_code == 302
 
 
 @pytest.mark.django_db

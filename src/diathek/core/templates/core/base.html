@@ -16,8 +16,10 @@
             <span class="site-nav-logo" aria-hidden="true">?</span>
             <span>diathek</span>
         </a>
+        {% if user.is_staff %}
         <a href="{% url 'import' %}">Hochladen</a>
         <a href="{% url 'unsorted' %}">Unsortiert</a>
+        {% endif %}
         <a href="{% url 'collection_list' %}">Sammlungen</a>
         <span class="site-nav-user">
             {{ user.name|default:user.username }}

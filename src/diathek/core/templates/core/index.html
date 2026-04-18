@@ -6,18 +6,20 @@
 <header class="page-header">
     <h1>Boxen</h1>
     <div class="page-header-actions">
+        {% if request.user.is_staff %}
         <a class="btn btn-primary" href="{% url 'import' %}">Neue Bilder hochladen</a>
-        {% if request.user.is_staff and deploy_enabled %}
+        {% if deploy_enabled %}
         <form method="post" action="{% url 'deploy' %}" class="inline-form"
               onsubmit="return confirm('Neue Version jetzt deployen?');">
             {% csrf_token %}
             <button type="submit" class="btn btn-deploy" title="Neue Version deployen">Deploy</button>
         </form>
         {% endif %}
+        {% endif %}
     </div>
 </header>
 
-{% if unsorted_count %}
+{% if request.user.is_staff and unsorted_count %}
 <p class="unsorted-banner">
     Es warten <a href="{% url 'unsorted' %}">{{ unsorted_count }} unsortierte Bilder</a> auf Zuordnung.
 </p>

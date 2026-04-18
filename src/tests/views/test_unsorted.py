@@ -13,6 +13,14 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def auth_client(client):
+    user = UserFactory(is_staff=True)
+    client.force_login(user)
+    client.user = user
+    return client
+
+
+@pytest.fixture
+def non_staff_client(client):
     user = UserFactory()
     client.force_login(user)
     client.user = user
@@ -22,6 +30,20 @@ def auth_client(client):
 @pytest.mark.django_db
 def test_unsorted_view_requires_login(client):
     response = client.get(reverse("unsorted"))
+
+    assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_unsorted_view_requires_staff(non_staff_client):
+    response = non_staff_client.get(reverse("unsorted"))
+
+    assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_unsorted_assign_requires_staff(non_staff_client):
+    response = non_staff_client.post(reverse("unsorted_assign"))
 
     assert response.status_code == 302
 
@@ -51,7 +73,7 @@ def test_unsorted_view_shows_empty_message_when_nothing_to_sort(auth_client):
 
 @pytest.mark.django_db
 def test_assign_requires_post(client):
-    user = UserFactory()
+    user = UserFactory(is_staff=True)
     client.force_login(user)
 
     response = client.get(reverse("unsorted_assign"))
@@ -129,7 +151,7 @@ def test_assign_rejects_filename_collision_with_existing_box_image(auth_client):
 
 class AssignSuccessTests(TestCase):
     def setUp(self):
-        self.user = UserFactory()
+        self.user = UserFactory(is_staff=True)
         self.client.force_login(self.user)
 
     def _image_with_thumb(self, *, filename):

@@ -34,6 +34,10 @@ from diathek.metadata.description import stamp_description
 POLL_THROTTLE_SECONDS = 30
 
 
+def _staff_required(view):
+    return user_passes_test(lambda u: u.is_active and u.is_staff)(view)
+
+
 def register(request, code):
     invite = get_object_or_404(InviteCode, code=code)
     if not invite.is_valid:
@@ -114,6 +118,7 @@ def _save_image_files(image, original_bytes, original_name, assets):
 
 
 @login_required
+@_staff_required
 def import_view(request):
     if request.method != "POST":
         return render(request, "core/import.html", {"form": ImportForm()})
@@ -207,6 +212,7 @@ class _ImportError(Exception):
 
 
 @login_required
+@_staff_required
 def unsorted_view(request):
     images = Image.objects.filter(box__isnull=True).order_by("filename")
     active_boxes = Box.objects.filter(archived=False).order_by("sort_order", "name")
@@ -216,6 +222,7 @@ def unsorted_view(request):
 
 
 @login_required
+@_staff_required
 @require_POST
 def unsorted_assign(request):
     image_uuids = request.POST.getlist("image_uuids")
@@ -793,10 +800,6 @@ def place_autocomplete(request):
             ]
         }
     )
-
-
-def _staff_required(view):
-    return user_passes_test(lambda u: u.is_active and u.is_staff)(view)
 
 
 @login_required

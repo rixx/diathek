@@ -12,6 +12,12 @@ def auth_client(client):
     return client
 
 
+@pytest.fixture
+def staff_client(client):
+    client.force_login(UserFactory(is_staff=True))
+    return client
+
+
 @pytest.mark.django_db
 def test_index_requires_login(client):
     response = client.get(reverse("index"))
@@ -20,12 +26,12 @@ def test_index_requires_login(client):
 
 
 @pytest.mark.django_db
-def test_index_lists_active_boxes_and_shows_unsorted_banner(auth_client):
+def test_index_lists_active_boxes_and_shows_unsorted_banner(staff_client):
     BoxFactory(name="Dachboden")
     archived = BoxFactory(name="Altarchiv", archived=True)
     ImageFactory(box=None, sequence_in_box=None)
 
-    response = auth_client.get(reverse("index"))
+    response = staff_client.get(reverse("index"))
 
     content = response.content.decode("utf-8")
     assert "Dachboden" in content
@@ -34,6 +40,19 @@ def test_index_lists_active_boxes_and_shows_unsorted_banner(auth_client):
     assert "Archivierte Boxen" in content
     assert archived.name in content
     assert "1 unsortierte" in content
+
+
+@pytest.mark.django_db
+def test_index_hides_upload_and_unsorted_for_non_staff(auth_client):
+    ImageFactory(box=None, sequence_in_box=None)
+
+    response = auth_client.get(reverse("index"))
+
+    content = response.content.decode("utf-8")
+    assert "Neue Bilder hochladen" not in content
+    assert "unsortierte" not in content
+    assert reverse("import") not in content
+    assert reverse("unsorted") not in content
 
 
 @pytest.mark.django_db
