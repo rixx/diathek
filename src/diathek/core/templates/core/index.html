@@ -20,6 +20,7 @@
         {% with first_image=box.images.first progress=box.progress %}
         {% if first_image %}
         <a href="{% url 'image_detail' box.uuid first_image.pk %}"><strong>{{ box.name }}</strong></a>
+        · <a href="{% url 'box_grid' box.uuid %}">Raster</a>
         {% else %}
         <strong>{{ box.name }}</strong>
         {% endif %}

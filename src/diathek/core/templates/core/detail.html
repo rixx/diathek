@@ -152,6 +152,7 @@
      data-state-url="{% url 'state' %}"
      data-driver-url="{% url 'driver_state' %}"
      data-fragment-url="{% url 'image_fragment' image.pk %}"
+     data-grid-url="{% url 'box_grid' box.uuid %}"
      data-current-user-display="{{ request.user.name|default:request.user.username }}"
      {% if prev_id %}data-prev-image-url="{% url 'image_detail' box.uuid prev_id %}"{% endif %}
      {% if next_id %}data-next-image-url="{% url 'image_detail' box.uuid next_id %}"{% endif %}
@@ -170,6 +171,7 @@
             <span class="detail-status-users" data-active-users></span>
         </div>
         <nav>
+            <a href="{% url 'box_grid' box.uuid %}" data-grid-link>Raster</a>
             <a href="{% if prev_id %}{% url 'image_detail' box.uuid prev_id %}{% else %}#{% endif %}"
                {% if not prev_id %}aria-disabled="true"{% endif %}>&larr;</a>
             <a href="{% if next_id %}{% url 'image_detail' box.uuid next_id %}{% else %}#{% endif %}"
@@ -209,6 +211,7 @@
             <dt>k / ←</dt><dd>Vorheriges Bild</dd>
             <dt>J</dt><dd>Nächste Box</dd>
             <dt>K</dt><dd>Vorherige Box</dd>
+            <dt>g</dt><dd>Rasteransicht</dd>
             <dt>p</dt><dd>Ort fokussieren</dd>
             <dt>d</dt><dd>Datum fokussieren</dd>
             <dt>n</dt><dd>Beschreibung fokussieren</dd>
@@ -560,6 +563,10 @@
             case "K":
                 ev.preventDefault();
                 navigate(root.dataset.prevBoxUrl);
+                break;
+            case "g":
+                ev.preventDefault();
+                navigate(root.dataset.gridUrl);
                 break;
             case "p":
                 ev.preventDefault();

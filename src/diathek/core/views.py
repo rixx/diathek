@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import F, Max
+from django.db.models import F, Max, Q
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -347,6 +347,67 @@ def image_detail(request, box_uuid, image_id):
         return redirect("index")
     context = _metadata_context(image, request)
     return render(request, "core/detail.html", context)
+
+
+GRID_FILTERS = (
+    ("all", "Alle"),
+    ("untagged", "Ungetaggt"),
+    ("place-todo", "Ort unklar"),
+    ("date-todo", "Datum unklar"),
+    ("flip-todo", "Spiegeln"),
+    ("edit-todo", "Lightroom"),
+    ("has-description", "Mit Beschreibung"),
+    ("any-todo", "Offene Todos"),
+)
+
+GRID_FILTER_KEYS = {key for key, _ in GRID_FILTERS}
+
+
+def _apply_grid_filter(qs, key):
+    if key == "untagged":
+        return qs.filter(
+            place__isnull=True, date_earliest__isnull=True, date_latest__isnull=True
+        )
+    if key == "place-todo":
+        return qs.filter(place_todo=True)
+    if key == "date-todo":
+        return qs.filter(date_todo=True)
+    if key == "flip-todo":
+        return qs.filter(needs_flip=True)
+    if key == "edit-todo":
+        return qs.exclude(edit_todo="")
+    if key == "has-description":
+        return qs.exclude(description="")
+    if key == "any-todo":
+        return qs.filter(
+            Q(place_todo=True)
+            | Q(date_todo=True)
+            | Q(needs_flip=True)
+            | ~Q(edit_todo="")
+        )
+    return qs
+
+
+@login_required
+def box_grid(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid)
+    raw_filter = request.GET.get("filter", "all")
+    active_filter = raw_filter if raw_filter in GRID_FILTER_KEYS else "all"
+    images = box.images.select_related("place").order_by("sequence_in_box")
+    first_image = images.first()
+    filtered_images = _apply_grid_filter(images, active_filter)
+    return render(
+        request,
+        "core/grid.html",
+        {
+            "box": box,
+            "images": filtered_images,
+            "first_image": first_image,
+            "filters": GRID_FILTERS,
+            "active_filter": active_filter,
+            "total_count": box.images.count(),
+        },
+    )
 
 
 @login_required

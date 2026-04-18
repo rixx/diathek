@@ -11,6 +11,7 @@ urlpatterns = [
     path(
         "box/<uuid:box_uuid>/<int:image_id>/", views.image_detail, name="image_detail"
     ),
+    path("box/<uuid:box_uuid>/grid/", views.box_grid, name="box_grid"),
     path("api/image/<int:image_id>/", views.image_save, name="image_save"),
     path(
         "api/image/<int:image_id>/fragment/",

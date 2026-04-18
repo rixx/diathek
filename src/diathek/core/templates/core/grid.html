@@ -1,0 +1,190 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ box.name }} · Raster · diathek{% endblock %}
+
+{% block extra_head %}
+<style>
+.grid-layout { display: grid; gap: 1rem; }
+.grid-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
+.grid-header h1 { margin: 0; font-size: 1.1rem; }
+.grid-header nav a { margin-left: 0.5rem; }
+
+.grid-filters { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+.grid-filter {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid #ccc;
+    background: #f6f6f6;
+    border-radius: 999px;
+    text-decoration: none;
+    color: inherit;
+}
+.grid-filter:hover { background: #eee; }
+.grid-filter.active { background: #036; color: #fff; border-color: #036; }
+.grid-filter-count { font-size: 0.75rem; color: #666; margin-left: 0.5rem; }
+
+.grid-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.5rem;
+}
+.grid-tile {
+    position: relative;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border: 2px solid transparent;
+    background: #fff;
+}
+.grid-tile:hover { border-color: #036; }
+.grid-tile.archived { pointer-events: none; opacity: 0.7; }
+.grid-tile img { width: 100%; display: block; background: #000; }
+.grid-tile .sequence {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.2rem;
+}
+.grid-tile .todos {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    gap: 0.15rem;
+}
+.grid-tile .todo-icon {
+    font-size: 0.75rem;
+    width: 1.15rem;
+    height: 1.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border-radius: 0.2rem;
+    font-weight: 700;
+}
+.grid-tile .todo-icon.place-todo { background: #c05a00; }
+.grid-tile .todo-icon.date-todo { background: #a03080; }
+.grid-tile .todo-icon.flip-todo { background: #0a6; }
+.grid-tile .todo-icon.edit-todo { background: #888; }
+.grid-tile .tag-state {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.2rem;
+}
+.grid-tile .tag-state.untagged { background: rgba(200, 50, 50, 0.85); }
+
+.grid-empty { padding: 2rem; text-align: center; color: #666; }
+
+.archive-banner {
+    background: #f6f1e8;
+    border: 1px solid #c8b990;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="grid-layout" data-grid-root data-box-uuid="{{ box.uuid }}">
+    <header class="grid-header">
+        <h1>{{ box.name }} · Raster</h1>
+        <nav>
+            {% if not box.archived and first_image %}
+            <a href="{% url 'image_detail' box.uuid first_image.pk %}">Detailansicht</a>
+            {% endif %}
+            <a href="{% url 'index' %}">Zur Übersicht</a>
+        </nav>
+    </header>
+
+    {% if box.archived %}
+    <p class="archive-banner">Diese Box ist archiviert und schreibgeschützt.</p>
+    {% endif %}
+
+    <nav class="grid-filters" role="tablist" aria-label="Filter">
+        {% for key, label in filters %}
+        <a class="grid-filter{% if key == active_filter %} active{% endif %}"
+           href="?filter={{ key }}"
+           data-grid-filter="{{ key }}"
+           role="tab"
+           aria-selected="{% if key == active_filter %}true{% else %}false{% endif %}">{{ label }}</a>
+        {% endfor %}
+        <span class="grid-filter-count">{{ images|length }} von {{ total_count }}</span>
+    </nav>
+
+    {% if images %}
+    <div class="grid-tiles">
+        {% for image in images %}
+        {% if box.archived %}
+        <span class="grid-tile archived"
+              data-image-id="{{ image.pk }}"
+              title="Box ist archiviert">
+        {% else %}
+        <a class="grid-tile"
+           href="{% url 'image_detail' box.uuid image.pk %}"
+           data-image-id="{{ image.pk }}">
+        {% endif %}
+            {% if image.thumb_small %}
+            <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy">
+            {% else %}
+            <div style="aspect-ratio: 3/2; display: flex; align-items: center; justify-content: center; background: #222; color: #aaa; font-size: 0.75rem;">{{ image.filename }}</div>
+            {% endif %}
+            <span class="sequence">{{ image.sequence_in_box }}</span>
+            <span class="todos">
+                {% if image.place_todo %}<span class="todo-icon place-todo" title="Ort unklar">O</span>{% endif %}
+                {% if image.date_todo %}<span class="todo-icon date-todo" title="Datum unklar">D</span>{% endif %}
+                {% if image.needs_flip %}<span class="todo-icon flip-todo" title="Spiegeln">F</span>{% endif %}
+                {% if image.edit_todo %}<span class="todo-icon edit-todo" title="Lightroom-Notiz">L</span>{% endif %}
+            </span>
+            {% if not image.place_id and not image.date_earliest and not image.date_latest %}
+            <span class="tag-state untagged">ungetaggt</span>
+            {% endif %}
+        {% if box.archived %}</span>{% else %}</a>{% endif %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="grid-empty">Keine Bilder passen zu diesem Filter.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(function () {
+    const root = document.querySelector("[data-grid-root]");
+    if (!root) return;
+
+    function isTypingTarget(el) {
+        if (!el) return false;
+        const tag = el.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+        if (el.isContentEditable) return true;
+        return false;
+    }
+
+    document.addEventListener("keydown", (ev) => {
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+        if (isTypingTarget(document.activeElement)) return;
+
+        if (ev.key === "/") {
+            const firstFilter = root.querySelector("[data-grid-filter]");
+            if (firstFilter) {
+                ev.preventDefault();
+                firstFilter.focus();
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}
