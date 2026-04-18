@@ -1,0 +1,31 @@
+{% extends "core/base.html" %}
+
+{% block title %}diathek{% endblock %}
+
+{% block content %}
+<h1>Boxen</h1>
+
+{% if unsorted_count %}
+<p class="unsorted-banner">
+    Es warten <a href="{% url 'unsorted' %}">{{ unsorted_count }} unsortierte Bilder</a> auf Zuordnung.
+</p>
+{% endif %}
+
+<p><a href="{% url 'import' %}">Neue Bilder hochladen</a></p>
+
+{% if boxes %}
+<ul class="box-list">
+    {% for box in boxes %}
+    <li>
+        <strong>{{ box.name }}</strong>
+        {% with progress=box.progress %}
+        <small>{{ progress.total }} Bilder, {{ progress.done }} fertig</small>
+        {% endwith %}
+        {% if box.description %}<p>{{ box.description }}</p>{% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>Noch keine Boxen angelegt.</p>
+{% endif %}
+{% endblock %}

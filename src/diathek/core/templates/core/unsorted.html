@@ -1,0 +1,140 @@
+{% extends "core/base.html" %}
+
+{% block title %}Unsortierte Bilder · diathek{% endblock %}
+
+{% block extra_head %}
+<style>
+.unsorted-layout { display: grid; grid-template-columns: 1fr 240px; gap: 1rem; }
+.unsorted-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.5rem; }
+.unsorted-tile { position: relative; border: 2px solid transparent; cursor: grab; user-select: none; }
+.unsorted-tile.selected { border-color: #3366cc; }
+.unsorted-tile img { width: 100%; display: block; }
+.unsorted-tile .filename { font-size: 0.75rem; padding: 2px 4px; background: rgba(0,0,0,0.5); color: #fff; position: absolute; bottom: 0; left: 0; right: 0; }
+.box-drop-list { list-style: none; padding: 0; }
+.box-drop-list li { padding: 0.5rem; border: 1px dashed #888; margin-bottom: 0.5rem; }
+.box-drop-list li.drag-over { background: #eef5ff; border-style: solid; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Unsortierte Bilder</h1>
+
+{% if images %}
+<p class="hint">
+    Bilder anklicken zum Markieren, dann auf eine Box ziehen. Ohne Markierung wird
+    das gezogene Bild einzeln verschoben.
+</p>
+<div class="unsorted-layout">
+    <div class="unsorted-grid" id="tiles">
+        {% for image in images %}
+        <div class="unsorted-tile" draggable="true" data-uuid="{{ image.uuid }}" data-filename="{{ image.filename }}">
+            {% if image.thumb_small %}
+            <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}">
+            {% else %}
+            <div class="placeholder">{{ image.filename }}</div>
+            {% endif %}
+            <span class="filename">{{ image.filename }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    <aside>
+        <h2>Boxen</h2>
+        {% if boxes %}
+        <ul class="box-drop-list" id="boxes">
+            {% for box in boxes %}
+            <li class="box-drop" data-uuid="{{ box.uuid }}" data-name="{{ box.name }}">
+                {{ box.name }}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>Noch keine Boxen. <a href="{% url 'import' %}">Beim Hochladen anlegen.</a></p>
+        {% endif %}
+    </aside>
+</div>
+<form id="assign-form" style="display:none">{% csrf_token %}</form>
+<p id="assign-status" role="status" aria-live="polite"></p>
+{% else %}
+<p>Keine unsortierten Bilder. <a href="{% url 'import' %}">Neue hochladen.</a></p>
+{% endif %}
+{% endblock %}
+
+{% block extra_body %}
+{% if images %}
+<script>
+(function () {
+    const tiles = document.getElementById("tiles");
+    const boxes = document.getElementById("boxes");
+    const status = document.getElementById("assign-status");
+    const csrfToken = document.querySelector("#assign-form [name=csrfmiddlewaretoken]").value;
+    const assignUrl = "{% url 'unsorted_assign' %}";
+    if (!tiles || !boxes) return;
+
+    let dragSet = [];
+
+    tiles.addEventListener("click", (event) => {
+        const tile = event.target.closest(".unsorted-tile");
+        if (!tile) return;
+        tile.classList.toggle("selected");
+    });
+
+    tiles.addEventListener("dragstart", (event) => {
+        const tile = event.target.closest(".unsorted-tile");
+        if (!tile) return;
+        const selected = Array.from(tiles.querySelectorAll(".unsorted-tile.selected"));
+        dragSet = selected.includes(tile) && selected.length
+            ? selected
+            : [tile];
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", dragSet.map(t => t.dataset.uuid).join(","));
+    });
+
+    boxes.addEventListener("dragover", (event) => {
+        const drop = event.target.closest(".box-drop");
+        if (!drop) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        drop.classList.add("drag-over");
+    });
+
+    boxes.addEventListener("dragleave", (event) => {
+        const drop = event.target.closest(".box-drop");
+        if (drop) drop.classList.remove("drag-over");
+    });
+
+    boxes.addEventListener("drop", async (event) => {
+        const drop = event.target.closest(".box-drop");
+        if (!drop || !dragSet.length) return;
+        event.preventDefault();
+        drop.classList.remove("drag-over");
+
+        const body = new FormData();
+        body.append("box_uuid", drop.dataset.uuid);
+        for (const tile of dragSet) body.append("image_uuids", tile.dataset.uuid);
+
+        try {
+            const response = await fetch(assignUrl, {
+                method: "POST",
+                headers: {"X-CSRFToken": csrfToken},
+                body,
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                status.textContent = payload.error || "Fehler beim Zuordnen.";
+                return;
+            }
+            for (const uuid of payload.moved) {
+                const tile = tiles.querySelector(`[data-uuid="${uuid}"]`);
+                if (tile) tile.remove();
+            }
+            status.textContent = `${payload.moved.length} Bilder in ${payload.box} verschoben.`;
+        } catch (error) {
+            status.textContent = "Netzwerkfehler.";
+        } finally {
+            dragSet = [];
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

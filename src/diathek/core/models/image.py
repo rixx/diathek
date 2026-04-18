@@ -1,7 +1,9 @@
 import uuid
 from datetime import timedelta
 
-from django.db import models
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db import models, transaction
 
 from diathek.core.models.base import BaseModel
 from diathek.core.models.box import Box
@@ -144,3 +146,56 @@ class Image(BaseModel):
             changed = True
         if changed:
             self.save(skip_log=True, bump_version=False)
+
+    @classmethod
+    def next_sequence_for(cls, box):
+        if box is None:
+            return None
+        last = cls.objects.filter(box=box).aggregate(
+            value=models.Max("sequence_in_box")
+        )["value"]
+        return (last or 0) + 1
+
+    def assign_to_box(self, new_box, *, sequence, user=None):
+        if self.box_id == (new_box.pk if new_box else None):
+            if self.sequence_in_box == sequence:
+                return
+            self.sequence_in_box = sequence
+            self.save(user=user)
+            return
+
+        field_info = (
+            ("image", image_original_upload_to),
+            ("thumb_small", image_thumb_small_upload_to),
+            ("thumb_detail", image_thumb_detail_upload_to),
+        )
+
+        contents = {}
+        for attr, _ in field_info:
+            field_file = getattr(self, attr)
+            if not field_file:
+                continue
+            with default_storage.open(field_file.name, "rb") as handle:
+                contents[attr] = (field_file.name, handle.read())
+
+        self.box = new_box
+        self.sequence_in_box = sequence
+
+        old_names = []
+        for attr, upload_to_fn in field_info:
+            if attr not in contents:
+                continue
+            old_name, data = contents[attr]
+            new_path = upload_to_fn(self, old_name)
+            saved_name = default_storage.save(new_path, ContentFile(data))
+            getattr(self, attr).name = saved_name
+            old_names.append(old_name)
+
+        with transaction.atomic():
+            self.save(user=user)
+
+            def _cleanup(names=tuple(old_names)):
+                for name in names:
+                    default_storage.delete(name)
+
+            transaction.on_commit(_cleanup)

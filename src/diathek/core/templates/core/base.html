@@ -4,8 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}diathek{% endblock %}</title>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
+    {% if user.is_authenticated %}
+    <nav class="site-nav">
+        <a href="{% url 'index' %}">diathek</a>
+        <a href="{% url 'import' %}">Hochladen</a>
+        <a href="{% url 'unsorted' %}">Unsortiert</a>
+        <span class="site-nav-user">
+            {{ user.name|default:user.username }}
+            &middot;
+            <a href="{% url 'logout' %}">Abmelden</a>
+        </span>
+    </nav>
+    {% endif %}
     <main>
         {% if messages %}
             <ul class="messages">
@@ -16,5 +29,6 @@
         {% endif %}
         {% block content %}{% endblock %}
     </main>
+    {% block extra_body %}{% endblock %}
 </body>
 </html>
