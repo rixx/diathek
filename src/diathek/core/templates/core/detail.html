@@ -93,11 +93,43 @@
 .date-suggestions li:hover { background: #eef; }
 .date-preview { font-size: 0.8rem; margin: 0.25rem 0 0; color: #555; min-height: 1.2em; }
 .date-preview.error { color: #b00; }
+
+.shortcut-help {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+.shortcut-help[hidden] { display: none; }
+.shortcut-help-panel {
+    background: #fff;
+    padding: 1.5rem 2rem;
+    max-width: 28rem;
+    border-radius: 0.25rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+.shortcut-help-panel h2 { margin-top: 0; }
+.shortcut-help-panel dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0;
+}
+.shortcut-help-panel dt { font-family: monospace; font-weight: 700; }
+.shortcut-help-panel dd { margin: 0; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="detail-layout">
+<div class="detail-layout"
+     data-detail-root
+     {% if prev_id %}data-prev-image-url="{% url 'image_detail' box.uuid prev_id %}"{% endif %}
+     {% if next_id %}data-next-image-url="{% url 'image_detail' box.uuid next_id %}"{% endif %}
+     {% if prev_box_image %}data-prev-box-url="{% url 'image_detail' prev_box_image.box.uuid prev_box_image.pk %}"{% endif %}
+     {% if next_box_image %}data-next-box-url="{% url 'image_detail' next_box_image.box.uuid next_box_image.pk %}"{% endif %}>
     <header class="detail-header">
         <h1><a href="{% url 'index' %}">{{ box.name }}</a> · Bild {{ position }} von {{ total }}</h1>
         <nav>
@@ -125,6 +157,25 @@
         {% include "core/_image_metadata.html" %}
     </aside>
 </div>
+
+<div class="shortcut-help" data-shortcut-help hidden role="dialog" aria-modal="true" aria-labelledby="shortcut-help-title">
+    <div class="shortcut-help-panel">
+        <h2 id="shortcut-help-title">Tastaturkürzel</h2>
+        <dl>
+            <dt>j / →</dt><dd>Nächstes Bild</dd>
+            <dt>k / ←</dt><dd>Vorheriges Bild</dd>
+            <dt>J</dt><dd>Nächste Box</dd>
+            <dt>K</dt><dd>Vorherige Box</dd>
+            <dt>p</dt><dd>Ort fokussieren</dd>
+            <dt>d</dt><dd>Datum fokussieren</dd>
+            <dt>n</dt><dd>Beschreibung fokussieren</dd>
+            <dt>Leer</dt><dd>„Ort unklar“ umschalten</dd>
+            <dt>f</dt><dd>„Spiegeln“ umschalten</dd>
+            <dt>?</dt><dd>Diese Hilfe</dd>
+            <dt>Esc</dt><dd>Fokus aufheben / schließen</dd>
+        </dl>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_body %}
@@ -137,6 +188,110 @@
     const preloader = new Image();
     preloader.addEventListener("load", () => { img.src = full; });
     preloader.src = full;
+})();
+</script>
+<script>
+(function () {
+    const root = document.querySelector("[data-detail-root]");
+    if (!root) return;
+    const help = document.querySelector("[data-shortcut-help]");
+
+    function isTypingTarget(el) {
+        if (!el) return false;
+        const tag = el.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+        if (el.isContentEditable) return true;
+        return false;
+    }
+
+    function navigate(url) {
+        if (url) window.location.href = url;
+    }
+
+    function focusSelector(selector) {
+        const el = root.querySelector(selector);
+        if (el) el.focus();
+    }
+
+    function toggleCheckbox(name) {
+        const el = root.querySelector(`input[name="${name}"]`);
+        if (el) el.click();
+    }
+
+    function showHelp() { if (help) help.hidden = false; }
+    function hideHelp() { if (help) help.hidden = true; }
+    function helpVisible() { return help && !help.hidden; }
+
+    if (help) {
+        help.addEventListener("click", (ev) => {
+            if (ev.target === help) hideHelp();
+        });
+    }
+
+    document.addEventListener("keydown", (ev) => {
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+
+        if (ev.key === "Escape") {
+            if (helpVisible()) {
+                ev.preventDefault();
+                hideHelp();
+                return;
+            }
+            if (isTypingTarget(document.activeElement)) {
+                ev.preventDefault();
+                document.activeElement.blur();
+            }
+            return;
+        }
+
+        if (isTypingTarget(document.activeElement)) return;
+        if (helpVisible()) return;
+
+        switch (ev.key) {
+            case "j":
+            case "ArrowRight":
+                ev.preventDefault();
+                navigate(root.dataset.nextImageUrl);
+                break;
+            case "k":
+            case "ArrowLeft":
+                ev.preventDefault();
+                navigate(root.dataset.prevImageUrl);
+                break;
+            case "J":
+                ev.preventDefault();
+                navigate(root.dataset.nextBoxUrl);
+                break;
+            case "K":
+                ev.preventDefault();
+                navigate(root.dataset.prevBoxUrl);
+                break;
+            case "p":
+                ev.preventDefault();
+                focusSelector("[data-place-input]");
+                break;
+            case "d":
+                ev.preventDefault();
+                focusSelector("[data-date-input]");
+                break;
+            case "n":
+                ev.preventDefault();
+                focusSelector('textarea[name="description"]');
+                break;
+            case " ":
+                ev.preventDefault();
+                toggleCheckbox("place_todo");
+                break;
+            case "f":
+                ev.preventDefault();
+                toggleCheckbox("needs_flip");
+                break;
+            case "?":
+                ev.preventDefault();
+                showHelp();
+                break;
+        }
+    });
 })();
 </script>
 <script>

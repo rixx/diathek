@@ -367,3 +367,123 @@ def test_fragment_endpoint_requires_login(client, image):
     response = client.get(reverse("image_fragment", args=[image.pk]))
 
     assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_image_detail_exposes_box_neighbours(auth_client):
+    first_box = BoxFactory(name="A", sort_order=0)
+    middle_box = BoxFactory(name="B", sort_order=1)
+    last_box = BoxFactory(name="C", sort_order=2)
+    ImageFactory(box=first_box, sequence_in_box=1, filename="a1.jpg")
+    first_of_first = ImageFactory(box=first_box, sequence_in_box=2, filename="a2.jpg")
+    middle_image = ImageFactory(box=middle_box, sequence_in_box=1, filename="b1.jpg")
+    first_of_last = ImageFactory(box=last_box, sequence_in_box=1, filename="c1.jpg")
+
+    response = auth_client.get(
+        reverse("image_detail", args=[middle_box.uuid, middle_image.pk])
+    )
+
+    # prev_box_image is the *first* image of the previous box (ordered by sequence)
+    assert (
+        response.context["prev_box_image"]
+        == first_box.images.order_by("sequence_in_box").first()
+    )
+    assert response.context["prev_box_image"] != first_of_first
+    assert response.context["next_box_image"] == first_of_last
+
+
+@pytest.mark.django_db
+def test_image_detail_first_box_has_no_prev_box_neighbour(auth_client):
+    first_box = BoxFactory(name="A", sort_order=0)
+    next_box = BoxFactory(name="B", sort_order=1)
+    image = ImageFactory(box=first_box, sequence_in_box=1, filename="a1.jpg")
+    next_first = ImageFactory(box=next_box, sequence_in_box=1, filename="b1.jpg")
+
+    response = auth_client.get(reverse("image_detail", args=[first_box.uuid, image.pk]))
+
+    assert response.context["prev_box_image"] is None
+    assert response.context["next_box_image"] == next_first
+
+
+@pytest.mark.django_db
+def test_image_detail_last_box_has_no_next_box_neighbour(auth_client):
+    prev_box = BoxFactory(name="A", sort_order=0)
+    last_box = BoxFactory(name="B", sort_order=1)
+    prev_first = ImageFactory(box=prev_box, sequence_in_box=1, filename="a1.jpg")
+    image = ImageFactory(box=last_box, sequence_in_box=1, filename="b1.jpg")
+
+    response = auth_client.get(reverse("image_detail", args=[last_box.uuid, image.pk]))
+
+    assert response.context["prev_box_image"] == prev_first
+    assert response.context["next_box_image"] is None
+
+
+@pytest.mark.django_db
+def test_image_detail_skips_archived_boxes_when_resolving_neighbours(auth_client):
+    box_a = BoxFactory(name="A", sort_order=0)
+    box_b = BoxFactory(name="B", sort_order=1)
+    box_c = BoxFactory(name="C", sort_order=2)
+    ImageFactory(box=box_a, sequence_in_box=1, filename="a1.jpg")
+    middle_image = ImageFactory(box=box_b, sequence_in_box=1, filename="b1.jpg")
+    first_of_c = ImageFactory(box=box_c, sequence_in_box=1, filename="c1.jpg")
+    box_a.archived = True
+    box_a.save()
+
+    response = auth_client.get(
+        reverse("image_detail", args=[box_b.uuid, middle_image.pk])
+    )
+
+    assert response.context["prev_box_image"] is None
+    assert response.context["next_box_image"] == first_of_c
+
+
+@pytest.mark.django_db
+def test_image_detail_neighbour_box_without_images_returns_none(auth_client):
+    box_a = BoxFactory(name="A", sort_order=0)
+    box_b = BoxFactory(name="B", sort_order=1)
+    image = ImageFactory(box=box_a, sequence_in_box=1, filename="a1.jpg")
+
+    response = auth_client.get(reverse("image_detail", args=[box_a.uuid, image.pk]))
+
+    assert box_b.images.count() == 0
+    assert response.context["next_box_image"] is None
+
+
+@pytest.mark.django_db
+def test_fragment_for_archived_box_image_has_no_box_neighbours(auth_client):
+    """image_fragment is reachable for archived-box images even though
+    image_detail redirects. When it happens, neighbour resolution silently
+    returns no prev/next box rather than raising ValueError."""
+    box_a = BoxFactory(name="A", sort_order=0)
+    box_b = BoxFactory(name="B", sort_order=1)
+    image = ImageFactory(box=box_b, sequence_in_box=1, filename="b1.jpg")
+    ImageFactory(box=box_a, sequence_in_box=1, filename="a1.jpg")
+    box_b.archived = True
+    box_b.save()
+
+    response = auth_client.get(reverse("image_fragment", args=[image.pk]))
+
+    assert response.status_code == 200
+    assert response.context["prev_box_image"] is None
+    assert response.context["next_box_image"] is None
+
+
+@pytest.mark.django_db
+def test_image_detail_renders_nav_data_attributes_and_help_overlay(auth_client):
+    box_a = BoxFactory(name="A", sort_order=0)
+    box_b = BoxFactory(name="B", sort_order=1)
+    first = ImageFactory(box=box_a, sequence_in_box=1, filename="a1.jpg")
+    second = ImageFactory(box=box_a, sequence_in_box=2, filename="a2.jpg")
+    next_box_first = ImageFactory(box=box_b, sequence_in_box=1, filename="b1.jpg")
+
+    response = auth_client.get(reverse("image_detail", args=[box_a.uuid, second.pk]))
+
+    content = response.content.decode()
+    expected_prev = reverse("image_detail", args=[box_a.uuid, first.pk])
+    expected_next_box = reverse("image_detail", args=[box_b.uuid, next_box_first.pk])
+    assert f'data-prev-image-url="{expected_prev}"' in content
+    assert f'data-next-box-url="{expected_next_box}"' in content
+    assert "data-next-image-url" not in content  # second is the last image in box A
+    assert "data-prev-box-url" not in content  # A is the first box
+    assert "data-shortcut-help" in content
+    assert "Tastaturkürzel" in content

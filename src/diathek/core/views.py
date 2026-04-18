@@ -260,8 +260,35 @@ def _neighbours(image):
     return index + 1, len(siblings), prev_id, next_id
 
 
+def _box_neighbour_images(current_box):
+    boxes = list(
+        Box.objects.filter(archived=False)
+        .order_by("sort_order", "name", "pk")
+        .values_list("pk", flat=True)
+    )
+    try:
+        idx = boxes.index(current_box.pk)
+    except ValueError:
+        return None, None
+    prev_box_pk = boxes[idx - 1] if idx > 0 else None
+    next_box_pk = boxes[idx + 1] if idx < len(boxes) - 1 else None
+
+    def _first(box_pk):
+        if box_pk is None:
+            return None
+        return (
+            Image.objects.filter(box_id=box_pk)
+            .order_by("sequence_in_box")
+            .select_related("box")
+            .first()
+        )
+
+    return _first(prev_box_pk), _first(next_box_pk)
+
+
 def _metadata_context(image, request, *, conflict=False, error=None):
     position, total, prev_id, next_id = _neighbours(image)
+    prev_box_image, next_box_image = _box_neighbour_images(image.box)
     return {
         "image": image,
         "box": image.box,
@@ -271,6 +298,8 @@ def _metadata_context(image, request, *, conflict=False, error=None):
         "total": total,
         "prev_id": prev_id,
         "next_id": next_id,
+        "prev_box_image": prev_box_image,
+        "next_box_image": next_box_image,
         "conflict": conflict,
         "error": error,
         "precisions": Image._meta.get_field("date_precision").choices,
