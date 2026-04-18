@@ -1,0 +1,12 @@
+{% extends "core/base.html" %}
+
+{% block title %}Einladung ungültig · diathek{% endblock %}
+
+{% block content %}
+<h1>Einladung ungültig</h1>
+{% if invite.is_used %}
+    <p>Diese Einladung wurde bereits verwendet.</p>
+{% else %}
+    <p>Diese Einladung ist abgelaufen.</p>
+{% endif %}
+{% endblock %}

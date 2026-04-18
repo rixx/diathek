@@ -1,0 +1,13 @@
+{% extends "core/base.html" %}
+
+{% block title %}Registrieren · diathek{% endblock %}
+
+{% block content %}
+<h1>Willkommen, {{ invite.name }}!</h1>
+<p>Dein Benutzername ist <strong>{{ invite.username }}</strong>. Bitte wähle ein Passwort, um dein Konto anzulegen.</p>
+<form method="post" novalidate>
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Konto anlegen</button>
+</form>
+{% endblock %}
