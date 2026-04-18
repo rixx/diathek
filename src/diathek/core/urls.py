@@ -20,4 +20,5 @@ urlpatterns = [
     path(
         "api/autocomplete/place/", views.place_autocomplete, name="place_autocomplete"
     ),
+    path("api/autocomplete/date/", views.date_autocomplete, name="date_autocomplete"),
 ]

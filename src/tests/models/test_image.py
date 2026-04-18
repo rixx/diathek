@@ -145,6 +145,41 @@ def test_upload_paths_use_box_uuid_and_image_uuid():
     )
 
 
+@pytest.mark.django_db
+def test_recent_date_displays_returns_distinct_values_ordered_by_updated_at():
+    from django.utils import timezone
+
+    now = timezone.now()
+    older = ImageFactory(date_display="1987")
+    newer = ImageFactory(date_display="Sommer 1987")
+    duplicate = ImageFactory(date_display="1987")
+    Image.objects.filter(pk=older.pk).update(
+        updated_at=now - datetime.timedelta(days=2)
+    )
+    Image.objects.filter(pk=newer.pk).update(updated_at=now)
+    Image.objects.filter(pk=duplicate.pk).update(
+        updated_at=now - datetime.timedelta(days=1)
+    )
+
+    assert Image.recent_date_displays() == ["Sommer 1987", "1987"]
+
+
+@pytest.mark.django_db
+def test_recent_date_displays_skips_empty_strings():
+    ImageFactory(date_display="")
+    ImageFactory(date_display="1987")
+
+    assert Image.recent_date_displays() == ["1987"]
+
+
+@pytest.mark.django_db
+def test_recent_date_displays_respects_limit():
+    for year in range(1980, 1990):
+        ImageFactory(date_display=str(year))
+
+    assert len(Image.recent_date_displays(limit=3)) == 3
+
+
 def test_upload_paths_fall_back_to_unsorted_when_box_missing():
     image_uuid = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
 

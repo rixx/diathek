@@ -57,6 +57,42 @@
 .place-suggestions li:hover { background: #eef; }
 .place-suggestions li.no-coords { color: #885500; }
 .place-warning { font-size: 0.8rem; color: #885500; margin: 0.25rem 0 0; }
+
+.date-field { position: relative; }
+.date-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.25rem; }
+.date-pill {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #ccc;
+    background: #f6f6f6;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.date-pill:hover { background: #eee; }
+.date-combobox { position: relative; }
+.date-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #ccc;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+}
+.date-suggestions[hidden] { display: none; }
+.date-suggestions li {
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+}
+.date-suggestions li.active,
+.date-suggestions li:hover { background: #eef; }
+.date-preview { font-size: 0.8rem; margin: 0.25rem 0 0; color: #555; min-height: 1.2em; }
+.date-preview.error { color: #b00; }
 </style>
 {% endblock %}
 
@@ -237,6 +273,171 @@
         const input = field.querySelector("[data-place-input]");
         if (!input) return;
         applyValue(input, pill.dataset.placeName);
+    });
+})();
+</script>
+<script>
+(function () {
+    const state = new WeakMap();
+    let debounceTimer = null;
+    let activeController = null;
+
+    function getState(input) {
+        let s = state.get(input);
+        if (!s) {
+            s = { items: [], activeIndex: -1, lastQuery: null, lastParse: null };
+            state.set(input, s);
+        }
+        return s;
+    }
+
+    function fieldOf(input) { return input.closest("[data-date-field]"); }
+    function suggestionsFor(input) { return fieldOf(input).querySelector("[data-date-suggestions]"); }
+    function previewFor(input) { return fieldOf(input).querySelector("[data-date-preview]"); }
+
+    function renderSuggestions(input, items) {
+        const ul = suggestionsFor(input);
+        const s = getState(input);
+        s.items = items;
+        s.activeIndex = items.length ? 0 : -1;
+        ul.innerHTML = "";
+        if (!items.length) { ul.hidden = true; return; }
+        items.forEach((word, idx) => {
+            const li = document.createElement("li");
+            li.textContent = word;
+            li.dataset.word = word;
+            if (idx === s.activeIndex) li.classList.add("active");
+            li.addEventListener("mousedown", (ev) => {
+                ev.preventDefault();
+                applyWord(input, word);
+            });
+            ul.appendChild(li);
+        });
+        ul.hidden = false;
+    }
+
+    function highlightActive(input) {
+        const ul = suggestionsFor(input);
+        const s = getState(input);
+        Array.from(ul.children).forEach((li, idx) => {
+            li.classList.toggle("active", idx === s.activeIndex);
+        });
+    }
+
+    function hideSuggestions(input) {
+        const ul = suggestionsFor(input);
+        ul.hidden = true;
+        getState(input).activeIndex = -1;
+    }
+
+    function renderPreview(input, parsed, error) {
+        const p = previewFor(input);
+        if (error) {
+            p.textContent = error;
+            p.classList.add("error");
+            return;
+        }
+        p.classList.remove("error");
+        if (!parsed) { p.textContent = ""; return; }
+        p.textContent = `→ ${parsed.summary} (${parsed.precision_label})`;
+    }
+
+    function applyWord(input, word) {
+        const value = input.value;
+        const match = value.match(/([\wäöüÄÖÜ]+)$/);
+        if (match) {
+            input.value = value.slice(0, value.length - match[1].length) + word;
+        } else {
+            input.value = (value ? value + " " : "") + word;
+        }
+        hideSuggestions(input);
+        input.focus();
+        fetchState(input);
+    }
+
+    function currentWordPrefix(input) {
+        const value = input.value.slice(0, input.selectionStart ?? input.value.length);
+        const match = value.match(/([\wäöüÄÖÜ]+)$/);
+        return match ? match[1] : "";
+    }
+
+    async function fetchState(input) {
+        const q = input.value;
+        const s = getState(input);
+        if (q === s.lastQuery) return;
+        s.lastQuery = q;
+        if (activeController) activeController.abort();
+        if (!q.trim()) {
+            renderPreview(input, null, null);
+            renderSuggestions(input, []);
+            return;
+        }
+        activeController = new AbortController();
+        try {
+            const url = input.dataset.autocompleteUrl + "?q=" + encodeURIComponent(q);
+            const res = await fetch(url, { signal: activeController.signal });
+            if (!res.ok) return;
+            const data = await res.json();
+            s.lastParse = data;
+            renderPreview(input, data.parsed, data.error);
+            const prefix = currentWordPrefix(input);
+            const pool = (data.suggestions || []).filter(w => !prefix || w.toLowerCase().startsWith(prefix.toLowerCase()));
+            renderSuggestions(input, pool);
+        } catch (err) {
+            if (err.name !== "AbortError") throw err;
+        }
+    }
+
+    document.addEventListener("input", (ev) => {
+        const input = ev.target.closest("[data-date-input]");
+        if (!input) return;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchState(input), 120);
+    });
+
+    document.addEventListener("focusin", (ev) => {
+        const input = ev.target.closest("[data-date-input]");
+        if (!input) return;
+        fetchState(input);
+    });
+
+    document.addEventListener("focusout", (ev) => {
+        const input = ev.target.closest("[data-date-input]");
+        if (!input) return;
+        setTimeout(() => hideSuggestions(input), 120);
+    });
+
+    document.addEventListener("keydown", (ev) => {
+        const input = ev.target.closest("[data-date-input]");
+        if (!input) return;
+        const s = getState(input);
+        if (ev.key === "ArrowDown" && s.items.length) {
+            ev.preventDefault();
+            s.activeIndex = Math.min(s.activeIndex + 1, s.items.length - 1);
+            highlightActive(input);
+        } else if (ev.key === "ArrowUp" && s.items.length) {
+            ev.preventDefault();
+            s.activeIndex = Math.max(s.activeIndex - 1, 0);
+            highlightActive(input);
+        } else if (ev.key === "Enter" && s.activeIndex >= 0 && s.items.length) {
+            ev.preventDefault();
+            applyWord(input, s.items[s.activeIndex]);
+        } else if (ev.key === "Escape") {
+            hideSuggestions(input);
+        }
+    });
+
+    document.addEventListener("click", (ev) => {
+        const pill = ev.target.closest(".date-pill");
+        if (!pill) return;
+        const field = pill.closest("[data-date-field]");
+        if (!field) return;
+        const input = field.querySelector("[data-date-input]");
+        if (!input) return;
+        input.value = pill.dataset.dateValue;
+        hideSuggestions(input);
+        fetchState(input);
+        input.dispatchEvent(new Event("change", { bubbles: true }));
     });
 })();
 </script>

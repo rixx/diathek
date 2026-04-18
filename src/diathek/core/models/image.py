@@ -148,6 +148,24 @@ class Image(BaseModel):
             self.save(skip_log=True, bump_version=False)
 
     @classmethod
+    def recent_date_displays(cls, limit=10):
+        seen = set()
+        out = []
+        pool = (
+            cls.objects.exclude(date_display="")
+            .order_by("-updated_at")
+            .values_list("date_display", flat=True)[: limit * 5]
+        )
+        for value in pool:
+            if value in seen:
+                continue
+            seen.add(value)
+            out.append(value)
+            if len(out) == limit:
+                break
+        return out
+
+    @classmethod
     def next_sequence_for(cls, box):
         if box is None:
             return None

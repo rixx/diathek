@@ -55,49 +55,47 @@ def test_all_boolean_flags_are_handled():
     assert result == {"place_todo": True, "date_todo": False, "needs_flip": True}
 
 
-def test_date_parses_iso_string():
-    result = parse_metadata_payload(_qd(date_earliest="1987-06-01"))
-
-    assert result == {"date_earliest": datetime.date(1987, 6, 1)}
-
-
-def test_date_latest_also_supported():
-    result = parse_metadata_payload(_qd(date_latest="1987-08-31"))
-
-    assert result == {"date_latest": datetime.date(1987, 8, 31)}
-
-
-def test_empty_date_becomes_none():
-    assert parse_metadata_payload(_qd(date_earliest="")) == {"date_earliest": None}
-
-
-def test_bad_date_raises():
-    with pytest.raises(MetadataError):
-        parse_metadata_payload(_qd(date_earliest="1987-13-40"))
-
-
-def test_date_precision_valid_choice_is_passed_through():
-    result = parse_metadata_payload(_qd(date_precision="year"))
-
-    assert result == {"date_precision": "year"}
-
-
-def test_date_precision_empty_is_accepted():
-    assert parse_metadata_payload(_qd(date_precision="")) == {"date_precision": ""}
-
-
-def test_date_precision_invalid_choice_raises():
-    with pytest.raises(MetadataError):
-        parse_metadata_payload(_qd(date_precision="millennium"))
-
-
-def test_text_fields_passed_through_raw():
-    result = parse_metadata_payload(
-        _qd(date_display="summer 1987", edit_todo="Rot reduzieren", description="ok")
-    )
+def test_date_display_derives_earliest_latest_and_precision():
+    result = parse_metadata_payload(_qd(date_display="summer 1987"))
 
     assert result == {
         "date_display": "summer 1987",
-        "edit_todo": "Rot reduzieren",
-        "description": "ok",
+        "date_earliest": datetime.date(1987, 6, 1),
+        "date_latest": datetime.date(1987, 8, 31),
+        "date_precision": "season",
     }
+
+
+def test_date_display_empty_clears_all_date_fields():
+    assert parse_metadata_payload(_qd(date_display="")) == {
+        "date_display": "",
+        "date_earliest": None,
+        "date_latest": None,
+        "date_precision": "",
+    }
+
+
+def test_date_display_whitespace_only_clears_fields():
+    assert parse_metadata_payload(_qd(date_display="   ")) == {
+        "date_display": "",
+        "date_earliest": None,
+        "date_latest": None,
+        "date_precision": "",
+    }
+
+
+def test_date_display_unparseable_raises():
+    with pytest.raises(MetadataError, match="Datum"):
+        parse_metadata_payload(_qd(date_display="asdfqwer"))
+
+
+def test_date_display_preserves_verbatim_display_in_result():
+    result = parse_metadata_payload(_qd(date_display="Sommer 1987"))
+
+    assert result["date_display"] == "Sommer 1987"
+
+
+def test_edit_todo_and_description_passed_through_raw():
+    result = parse_metadata_payload(_qd(edit_todo="Rot reduzieren", description="ok"))
+
+    assert result == {"edit_todo": "Rot reduzieren", "description": "ok"}

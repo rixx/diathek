@@ -185,10 +185,10 @@ def test_save_invalid_if_match_returns_428(auth_client, image):
 
 @pytest.mark.django_db
 def test_save_invalid_payload_returns_400_with_error_fragment(auth_client, image):
-    response = _patch(auth_client, image, {"date_earliest": "nope"})
+    response = _patch(auth_client, image, {"date_display": "nicht lesbar"})
 
     assert response.status_code == 400
-    assert b"Ung\xc3\xbcltig" in response.content
+    assert b"Datum" in response.content
     image.refresh_from_db()
     assert image.version == 1
 

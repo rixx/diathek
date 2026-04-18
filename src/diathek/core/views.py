@@ -14,6 +14,7 @@ from diathek.core.forms import ImportForm, RegistrationForm
 from diathek.core.metadata import MetadataError, parse_metadata_payload
 from diathek.core.models import Box, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
+from diathek.metadata import dateparse
 from diathek.metadata.description import stamp_description
 
 
@@ -265,6 +266,7 @@ def _metadata_context(image, request, *, conflict=False, error=None):
         "image": image,
         "box": image.box,
         "recent_places": list(Place.objects.recent()),
+        "recent_dates": Image.recent_date_displays(),
         "position": position,
         "total": total,
         "prev_id": prev_id,
@@ -399,6 +401,59 @@ def _diff_updates(image, updates):
 def image_fragment(request, image_id):
     image = get_object_or_404(Image.objects.select_related("box", "place"), pk=image_id)
     return _render_fragment(request, image)
+
+
+_PRECISION_LABELS = {
+    "exact": "Tag",
+    "month": "Monat",
+    "season": "Saison",
+    "year": "Jahr",
+    "range": "Zeitraum",
+    "decade": "Jahrzehnt",
+    "unknown": "unbekannt",
+}
+
+
+def _format_parsed(parsed):
+    start = parsed.earliest
+    end = parsed.latest
+    label = _PRECISION_LABELS.get(parsed.precision, parsed.precision)
+    if parsed.precision == "exact":
+        summary = start.isoformat()
+    elif parsed.precision == "month":
+        summary = f"{start:%m/%Y}"
+    elif parsed.precision == "year":
+        summary = f"{start.year}"
+    elif parsed.precision == "decade":
+        summary = f"{start.year}–{end.year}"
+    elif parsed.precision == "season":
+        summary = f"{start:%m/%Y} – {end:%m/%Y}"
+    else:
+        summary = f"{start.year}–{end.year}"
+    return {
+        "earliest": start.isoformat(),
+        "latest": end.isoformat(),
+        "precision": parsed.precision,
+        "precision_label": label,
+        "display": parsed.display,
+        "summary": summary,
+    }
+
+
+@login_required
+def date_autocomplete(request):
+    text = request.GET.get("q", "")
+    parsed_payload = None
+    error = None
+    if text.strip():
+        try:
+            parsed_payload = _format_parsed(dateparse.parse(text))
+        except dateparse.ParseError as err:
+            error = str(err)
+    suggestions = dateparse.word_suggestions(text.strip())
+    return JsonResponse(
+        {"parsed": parsed_payload, "error": error, "suggestions": suggestions}
+    )
 
 
 @login_required
