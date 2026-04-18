@@ -220,3 +220,22 @@ def test_driver_bumps_last_poll(auth_client):
 
     auth_client.user.refresh_from_db()
     assert auth_client.user.last_poll is not None
+
+
+@pytest.mark.django_db
+def test_driver_rejects_advance_into_archived_box(auth_client):
+    box = BoxFactory(archived=True)
+
+    response = auth_client.post(reverse("driver_state"), {"box_uuid": str(box.uuid)})
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_driver_rejects_advance_to_image_in_archived_box(auth_client):
+    box = BoxFactory(archived=True)
+    image = ImageFactory(box=box, sequence_in_box=1)
+
+    response = auth_client.post(reverse("driver_state"), {"image_id": str(image.pk)})
+
+    assert response.status_code == 403

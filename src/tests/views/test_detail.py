@@ -68,7 +68,7 @@ def test_image_detail_redirects_for_archived_box(auth_client, image):
     response = auth_client.get(reverse("image_detail", args=[image.box.uuid, image.pk]))
 
     assert response.status_code == 302
-    assert response.url == reverse("index")
+    assert response.url == reverse("box_grid", args=[image.box.uuid])
 
 
 @pytest.mark.django_db

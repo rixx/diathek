@@ -3,15 +3,25 @@
 {% block title %}diathek{% endblock %}
 
 {% block content %}
-<h1>Boxen</h1>
+<header class="page-header">
+    <h1>Boxen</h1>
+    <div class="page-header-actions">
+        <a class="btn btn-primary" href="{% url 'import' %}">Neue Bilder hochladen</a>
+        {% if request.user.is_staff and deploy_enabled %}
+        <form method="post" action="{% url 'deploy' %}" class="inline-form"
+              onsubmit="return confirm('Neue Version jetzt deployen?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-deploy" title="Neue Version deployen">Deploy</button>
+        </form>
+        {% endif %}
+    </div>
+</header>
 
 {% if unsorted_count %}
 <p class="unsorted-banner">
     Es warten <a href="{% url 'unsorted' %}">{{ unsorted_count }} unsortierte Bilder</a> auf Zuordnung.
 </p>
 {% endif %}
-
-<p><a href="{% url 'import' %}">Neue Bilder hochladen</a></p>
 
 {% if boxes %}
 <ul class="box-list">
@@ -31,6 +41,46 @@
     {% endfor %}
 </ul>
 {% else %}
-<p>Noch keine Boxen angelegt.</p>
+<p class="empty-state">Noch keine Boxen angelegt.</p>
 {% endif %}
+
+{% if collections %}
+<section class="home-collections">
+    <header class="section-header">
+        <h2>Sammlungen</h2>
+        <a href="{% url 'collection_list' %}">Alle Sammlungen</a>
+    </header>
+    <ul class="collection-strip">
+        {% for collection in collections %}
+        <li class="collection-strip-item">
+            <a href="{% url 'collection_detail' collection.pk %}">
+                {% if collection.cover_image and collection.cover_image.thumb_small %}
+                <img src="{{ collection.cover_image.thumb_small.url }}" alt="">
+                {% else %}
+                <span class="collection-strip-placeholder" aria-hidden="true">?</span>
+                {% endif %}
+                <span class="collection-strip-title">{{ collection.title }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if archived_boxes %}
+<section class="home-archived">
+    <header class="section-header">
+        <h2>Archivierte Boxen</h2>
+    </header>
+    <ul class="archived-list">
+        {% for box in archived_boxes %}
+        <li>
+            <a href="{% url 'box_grid' box.uuid %}">{{ box.name }}</a>
+            <small>{{ box.archived_at|date:"d.m.Y" }}</small>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 {% endblock %}

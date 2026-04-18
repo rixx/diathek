@@ -1,17 +1,23 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}diathek{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/diathek.css' %}">
+    <link rel="icon" type="image/svg+xml" href="{% static 'core/favicon.svg' %}">
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body{% if user.is_authenticated %} hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}>
     {% if user.is_authenticated %}
     <nav class="site-nav">
-        <a href="{% url 'index' %}">diathek</a>
+        <a class="site-nav-brand" href="{% url 'index' %}">
+            <span class="site-nav-logo" aria-hidden="true">?</span>
+            <span>diathek</span>
+        </a>
         <a href="{% url 'import' %}">Hochladen</a>
         <a href="{% url 'unsorted' %}">Unsortiert</a>
+        <a href="{% url 'collection_list' %}">Sammlungen</a>
         <span class="site-nav-user">
             {{ user.name|default:user.username }}
             &middot;

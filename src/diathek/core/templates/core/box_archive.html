@@ -1,0 +1,63 @@
+{% extends "core/base.html" %}
+
+{% block title %}Box „{{ box.name }}“ archivieren · diathek{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Box archivieren</h1>
+</header>
+
+<section class="archive-summary">
+    <h2>{{ box.name }}</h2>
+    <dl class="kv-list">
+        <dt>Bilder gesamt</dt><dd>{{ progress.total }}</dd>
+        <dt>Getaggt</dt><dd>{{ progress.tagged }}</dd>
+        <dt>Ort unklar</dt><dd>{{ progress.todo_place }}</dd>
+        <dt>Datum unklar</dt><dd>{{ progress.todo_date }}</dd>
+        <dt>Spiegeln nötig</dt><dd>{{ progress.todo_flip }}</dd>
+        <dt>Lightroom-Notizen</dt><dd>{{ progress.todo_edit }}</dd>
+    </dl>
+</section>
+
+{% if not can_archive %}
+<p class="archive-banner archive-banner--warn">
+    Diese Box kann nicht archiviert werden: {{ open_todos|length }} Bild{{ open_todos|length|pluralize:"er" }} mit offenen Todos.
+</p>
+<ul class="open-todos">
+    {% for image in open_todos %}
+    <li>
+        <a href="{% url 'image_detail' box.uuid image.pk %}">{{ image.filename }}</a>
+        <small>
+            {% if image.place_todo %}Ort · {% endif %}
+            {% if image.date_todo %}Datum · {% endif %}
+            {% if image.needs_flip %}Spiegeln · {% endif %}
+            {% if image.edit_todo %}Lightroom{% endif %}
+        </small>
+    </li>
+    {% endfor %}
+</ul>
+<p><a class="btn btn-secondary" href="{% url 'box_grid' box.uuid %}">Zum Raster</a></p>
+{% else %}
+<p class="archive-warning">
+    Archivieren ist endgültig. Die Originaldateien und großen Vorschaubilder werden von der Platte gelöscht;
+    nur Miniaturen bleiben übrig. Der Bearbeitungsverlauf einzelner Bilder wird mit entfernt.
+</p>
+<form method="post" class="form-grid">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="form-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="form-field{% if form.confirm_name.errors %} form-field--error{% endif %}">
+        <label for="{{ form.confirm_name.id_for_label }}">
+            Zur Bestätigung bitte „{{ box.name }}“ eingeben:
+        </label>
+        {{ form.confirm_name }}
+        {% if form.confirm_name.errors %}<p class="field-error">{{ form.confirm_name.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-danger">Endgültig archivieren</button>
+        <a class="btn btn-secondary" href="{% url 'box_grid' box.uuid %}">Abbrechen</a>
+    </div>
+</form>
+{% endif %}
+{% endblock %}

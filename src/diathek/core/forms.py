@@ -1,7 +1,50 @@
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 
-from diathek.core.models import Box, User
+from diathek.core.models import Box, Collection, User
+
+
+class CollectionForm(forms.ModelForm):
+    class Meta:
+        model = Collection
+        fields = ("title", "immich_url", "description", "cover_image", "boxes")
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 4}),
+            "boxes": forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["boxes"].queryset = Box.objects.order_by("sort_order", "name")
+        self.fields["boxes"].required = False
+        instance = self.instance if self.instance.pk else None
+        cover_qs = self.fields["cover_image"].queryset
+        if instance is not None:
+            cover_qs = cover_qs.filter(box__in=instance.boxes.all())
+        else:
+            cover_qs = cover_qs.none()
+        self.fields["cover_image"].queryset = cover_qs
+        self.fields["cover_image"].required = False
+
+
+class BoxArchiveForm(forms.Form):
+    confirm_name = forms.CharField(
+        label="Box-Name zur Bestätigung",
+        max_length=200,
+        widget=forms.TextInput(attrs={"autocomplete": "off"}),
+    )
+
+    def __init__(self, *args, box, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.box = box
+
+    def clean_confirm_name(self):
+        value = self.cleaned_data["confirm_name"]
+        if value != self.box.name:
+            raise forms.ValidationError(
+                "Der eingegebene Name stimmt nicht mit dem Box-Namen überein."
+            )
+        return value
 
 
 class RegistrationForm(forms.Form):

@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+
+{% block title %}{% if collection %}Sammlung „{{ collection.title }}“{% else %}Neue Sammlung{% endif %} · diathek{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>{% if collection %}Sammlung bearbeiten{% else %}Neue Sammlung{% endif %}</h1>
+</header>
+
+<form method="post" class="form-grid">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="form-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+    {% for field in form %}
+    <div class="form-field{% if field.errors %} form-field--error{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+        {% if field.errors %}<p class="field-error">{{ field.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Speichern</button>
+        {% if collection %}
+        <a class="btn btn-secondary" href="{% url 'collection_detail' collection.pk %}">Abbrechen</a>
+        {% else %}
+        <a class="btn btn-secondary" href="{% url 'collection_list' %}">Abbrechen</a>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+
+{% block title %}Sammlungen · diathek{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Sammlungen</h1>
+    {% if request.user.is_staff %}
+    <a class="btn btn-primary" href="{% url 'collection_create' %}">Neue Sammlung</a>
+    {% endif %}
+</header>
+
+{% if collections %}
+<ul class="collection-list">
+    {% for collection in collections %}
+    <li class="collection-card">
+        {% if collection.cover_image and collection.cover_image.thumb_small %}
+        <a class="collection-card-cover" href="{% url 'collection_detail' collection.pk %}">
+            <img src="{{ collection.cover_image.thumb_small.url }}" alt="">
+        </a>
+        {% else %}
+        <a class="collection-card-cover collection-card-cover--empty" href="{% url 'collection_detail' collection.pk %}"></a>
+        {% endif %}
+        <div class="collection-card-body">
+            <h2><a href="{% url 'collection_detail' collection.pk %}">{{ collection.title }}</a></h2>
+            {% if collection.description %}<p>{{ collection.description|truncatechars:160 }}</p>{% endif %}
+            <small>{{ collection.boxes.count }} Box{{ collection.boxes.count|pluralize:"en" }} · aktualisiert {{ collection.updated_at|date:"d.m.Y" }}</small>
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">Noch keine Sammlungen angelegt.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ collection.title }} · diathek{% endblock %}
+
+{% block content %}
+<article class="collection-detail">
+    <header class="page-header">
+        <h1>{{ collection.title }}</h1>
+        {% if request.user.is_staff %}
+        <a class="btn btn-secondary" href="{% url 'collection_edit' collection.pk %}">Bearbeiten</a>
+        {% endif %}
+    </header>
+
+    {% if collection.cover_image and collection.cover_image.thumb_small %}
+    <div class="collection-cover">
+        <img src="{{ collection.cover_image.thumb_small.url }}" alt="">
+    </div>
+    {% endif %}
+
+    {% if collection.immich_url %}
+    <p class="collection-immich">
+        <a class="btn btn-primary" href="{{ collection.immich_url }}" rel="noopener noreferrer">In Immich öffnen &rarr;</a>
+    </p>
+    {% else %}
+    <p class="collection-immich-placeholder">Immich-Link noch nicht bereit.</p>
+    {% endif %}
+
+    {% if collection.description %}
+    <section class="collection-description">
+        {{ collection.description|linebreaks }}
+    </section>
+    {% endif %}
+
+    <section class="collection-boxes">
+        <h2>Enthaltene Boxen</h2>
+        {% if boxes %}
+        <ul class="box-list">
+            {% for box in boxes %}
+            <li>
+                <a href="{% url 'box_grid' box.uuid %}"><strong>{{ box.name }}</strong></a>
+                {% if box.archived %}<small>archiviert am {{ box.archived_at|date:"d.m.Y" }}</small>{% endif %}
+                {% if box.description %}<p>{{ box.description }}</p>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>Keine Boxen zugeordnet.</p>
+        {% endif %}
+    </section>
+</article>
+{% endblock %}

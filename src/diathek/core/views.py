@@ -1,24 +1,32 @@
 from datetime import timedelta
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import F, Max, Q
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 from PIL import UnidentifiedImageError
 
-from diathek.core.forms import ImportForm, RegistrationForm
+from diathek.core.forms import (
+    BoxArchiveForm,
+    CollectionForm,
+    ImportForm,
+    RegistrationForm,
+)
 from diathek.core.metadata import (
     MetadataError,
     parse_batch_payload,
     parse_metadata_payload,
 )
-from diathek.core.models import Box, DriverState, Image, InviteCode, Place
+from diathek.core.models import Box, Collection, DriverState, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
 from diathek.metadata.description import stamp_description
@@ -47,11 +55,19 @@ def register(request, code):
 @login_required
 def index(request):
     active_boxes = Box.objects.filter(archived=False).order_by("sort_order", "name")
+    archived_boxes = Box.objects.filter(archived=True).order_by("-archived_at", "name")
+    collections = Collection.objects.order_by("-updated_at")[:6]
     unsorted_count = Image.objects.filter(box__isnull=True).count()
     return render(
         request,
         "core/index.html",
-        {"boxes": active_boxes, "unsorted_count": unsorted_count},
+        {
+            "boxes": active_boxes,
+            "archived_boxes": archived_boxes,
+            "collections": collections,
+            "unsorted_count": unsorted_count,
+            "deploy_enabled": bool(getattr(settings, "DEPLOY_FLAG_FILE", "")),
+        },
     )
 
 
@@ -348,7 +364,7 @@ def image_detail(request, box_uuid, image_id):
         Image.objects.select_related("box", "place"), pk=image_id, box__uuid=box_uuid
     )
     if image.box.archived:
-        return redirect("index")
+        return redirect("box_grid", box_uuid=image.box.uuid)
     context = _metadata_context(image, request)
     return render(request, "core/detail.html", context)
 
@@ -410,6 +426,7 @@ def box_grid(request, box_uuid):
             "filters": GRID_FILTERS,
             "active_filter": active_filter,
             "total_count": box.images.count(),
+            "collections": list(box.collections.order_by("-updated_at")),
         },
     )
 
@@ -721,6 +738,10 @@ def driver_state(request):
         return JsonResponse(_driver_state_snapshot())
 
     box, image = _resolve_driver_targets(data)
+    if (box is not None and box.archived) or (
+        image is not None and image.box and image.box.archived
+    ):
+        return HttpResponseForbidden("Box ist archiviert.")
 
     with transaction.atomic():
         state_row = (
@@ -763,3 +784,104 @@ def place_autocomplete(request):
             ]
         }
     )
+
+
+def _staff_required(view):
+    return user_passes_test(lambda u: u.is_active and u.is_staff)(view)
+
+
+@login_required
+def collection_list(request):
+    collections = Collection.objects.order_by("-updated_at")
+    return render(request, "core/collection_list.html", {"collections": collections})
+
+
+@login_required
+def collection_detail(request, pk):
+    collection = get_object_or_404(
+        Collection.objects.select_related("cover_image"), pk=pk
+    )
+    boxes = collection.boxes.order_by("sort_order", "name")
+    return render(
+        request,
+        "core/collection_detail.html",
+        {"collection": collection, "boxes": boxes},
+    )
+
+
+@login_required
+@_staff_required
+def collection_edit(request, pk=None):
+    collection = get_object_or_404(Collection, pk=pk) if pk is not None else None
+    if request.method == "POST":
+        form = CollectionForm(request.POST, instance=collection)
+        if form.is_valid():
+            if collection is None:
+                saved = form.save(commit=False)
+                saved.save(user=request.user)
+                form.save_m2m()
+            else:
+                saved = form.save(commit=False)
+                saved.save(user=request.user)
+                form.save_m2m()
+            messages.success(request, "Sammlung gespeichert.")
+            return redirect("collection_detail", pk=saved.pk)
+    else:
+        form = CollectionForm(instance=collection)
+    return render(
+        request, "core/collection_edit.html", {"form": form, "collection": collection}
+    )
+
+
+@login_required
+@_staff_required
+def box_archive(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid)
+    if box.archived:
+        return redirect("box_grid", box_uuid=box.uuid)
+
+    form = BoxArchiveForm(box=box)
+    if request.method == "POST":
+        form = BoxArchiveForm(request.POST, box=box)
+        if form.is_valid():
+            try:
+                box.archive(user=request.user)
+            except ValueError as err:
+                messages.error(request, str(err))
+            else:
+                messages.success(request, f"Box „{box.name}“ archiviert.")
+                return redirect("box_grid", box_uuid=box.uuid)
+
+    images = box.images.select_related("place").order_by("sequence_in_box")
+    open_todos = [image for image in images if image.has_open_todos()]
+    return render(
+        request,
+        "core/box_archive.html",
+        {
+            "box": box,
+            "form": form,
+            "progress": box.progress,
+            "can_archive": box.can_archive,
+            "open_todos": open_todos,
+        },
+    )
+
+
+@login_required
+@_staff_required
+@require_POST
+def trigger_deploy(request):
+    flag_path = getattr(settings, "DEPLOY_FLAG_FILE", "") or ""
+    if not flag_path:
+        messages.error(
+            request, "Deploy ist nicht konfiguriert (DEPLOY_FLAG_FILE fehlt)."
+        )
+        return redirect("index")
+
+    target = Path(flag_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(f"{request.user.username} {timezone.now().isoformat()}\n")
+    messages.success(
+        request, "Deploy wurde angestoßen. Der Neustart erfolgt automatisch."
+    )
+    return redirect(request.META.get("HTTP_REFERER") or reverse("index"))

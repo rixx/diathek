@@ -178,17 +178,36 @@
      data-date-autocomplete-url="{% url 'date_autocomplete' %}"
      {% endif %}>
     <header class="grid-header">
-        <h1>{{ box.name }} · Raster</h1>
+        <h1>{{ box.name }} · Raster{% if box.archived %} · <span class="archive-tag">archiviert</span>{% endif %}</h1>
         <nav>
             {% if not box.archived and first_image %}
             <a href="{% url 'image_detail' box.uuid first_image.pk %}">Detailansicht</a>
+            {% endif %}
+            {% if not box.archived and request.user.is_staff %}
+            <a href="{% url 'box_archive' box.uuid %}">Archivieren</a>
             {% endif %}
             <a href="{% url 'index' %}">Zur Übersicht</a>
         </nav>
     </header>
 
     {% if box.archived %}
-    <p class="archive-banner">Diese Box ist archiviert und schreibgeschützt.</p>
+    <section class="archive-summary">
+        <p class="archive-banner">Diese Box ist archiviert und schreibgeschützt.</p>
+        {% if collections %}
+        <ul class="collection-links">
+            {% for collection in collections %}
+            <li>
+                <a class="btn btn-primary" href="{% url 'collection_detail' collection.pk %}">Sammlung: {{ collection.title }}</a>
+                {% if collection.immich_url %}
+                <a class="btn btn-secondary" href="{{ collection.immich_url }}" rel="noopener noreferrer">In Immich öffnen</a>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="archive-banner archive-banner--soft">Sammlung noch nicht bereit.</p>
+        {% endif %}
+    </section>
     {% endif %}
 
     {% if not box.archived %}
