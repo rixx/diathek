@@ -13,6 +13,8 @@ urlpatterns = [
     ),
     path("box/<uuid:box_uuid>/grid/", views.box_grid, name="box_grid"),
     path("box/<uuid:box_uuid>/archiv/", views.box_archive, name="box_archive"),
+    path("orte/", views.place_list, name="place_list"),
+    path("orte/<int:pk>/", views.place_set_coords, name="place_set_coords"),
     path("sammlungen/", views.collection_list, name="collection_list"),
     path("sammlung/neu/", views.collection_edit, name="collection_create"),
     path("sammlung/<int:pk>/", views.collection_detail, name="collection_detail"),

@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import F, Max, Q
+from django.db.models import Case, Count, F, Max, Q, When
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -29,6 +29,7 @@ from diathek.core.metadata import (
 from diathek.core.models import Box, Collection, DriverState, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
+from diathek.metadata.coords import parse_coordinates
 from diathek.metadata.description import stamp_description
 
 POLL_THROTTLE_SECONDS = 30
@@ -799,6 +800,44 @@ def place_autocomplete(request):
                 for p in matches
             ]
         }
+    )
+
+
+def _annotated_places():
+    return Place.objects.annotate(image_count=Count("images")).order_by(
+        Case(When(latitude__isnull=True, then=0), default=1),
+        "name",
+    )
+
+
+@login_required
+def place_list(request):
+    return render(
+        request, "core/place_list.html", {"places": _annotated_places()}
+    )
+
+
+@login_required
+@require_POST
+def place_set_coords(request, pk):
+    place = get_object_or_404(Place, pk=pk)
+    raw = request.POST.get("raw", "").strip()
+    error = None
+    if not raw:
+        error = "Bitte einen Link oder Koordinaten eingeben."
+    else:
+        coords = parse_coordinates(raw)
+        if coords is None:
+            error = "Konnte keine Koordinaten erkennen."
+        else:
+            lat, lng = coords
+            if place.latitude != lat or place.longitude != lng:
+                place.latitude = lat
+                place.longitude = lng
+                place.save(user=request.user)
+    place.image_count = place.images.count()
+    return render(
+        request, "core/_place_row.html", {"place": place, "error": error}
     )
 
 

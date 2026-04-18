@@ -20,6 +20,7 @@
         <a href="{% url 'import' %}">Hochladen</a>
         <a href="{% url 'unsorted' %}">Unsortiert</a>
         {% endif %}
+        <a href="{% url 'place_list' %}">Orte</a>
         <a href="{% url 'collection_list' %}">Sammlungen</a>
         <span class="site-nav-user">
             {{ user.name|default:user.username }}

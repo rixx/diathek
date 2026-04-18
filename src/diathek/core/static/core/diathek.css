@@ -357,6 +357,90 @@ h1, h2, h3 {
 }
 .archived-list small { color: var(--c-muted); font-size: 0.8rem; }
 
+/* place list */
+.place-list-hint {
+    color: var(--c-muted);
+    margin-top: 0;
+}
+.place-list-hint code {
+    background: var(--c-surface);
+    padding: 0.05rem 0.3rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9em;
+}
+.place-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--space-sm);
+}
+.place-row {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm) var(--space-md);
+    display: grid;
+    gap: var(--space-xs);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "head coords"
+        "form form"
+        "error error";
+    align-items: center;
+}
+.place-row--missing {
+    border-left: 3px solid var(--c-warn);
+}
+.place-row-head {
+    grid-area: head;
+    display: flex;
+    gap: var(--space-sm);
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+.place-row-head h2 { margin: 0; font-size: 1rem; }
+.place-row-head small { color: var(--c-muted); font-size: 0.85rem; }
+.place-row-coords {
+    grid-area: coords;
+    display: flex;
+    gap: var(--space-sm);
+    align-items: baseline;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+}
+.place-coords {
+    font-variant-numeric: tabular-nums;
+    color: var(--c-accent-strong);
+}
+.place-coords--missing {
+    color: var(--c-warn);
+    font-style: italic;
+}
+.place-coords-link { font-size: 0.85rem; }
+.place-row-form {
+    grid-area: form;
+    display: flex;
+    gap: var(--space-sm);
+    align-items: stretch;
+}
+.place-row-form input[type=text] {
+    flex: 1;
+    min-width: 0;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    background: var(--c-bg);
+}
+.place-row-error {
+    grid-area: error;
+    margin: 0;
+    color: var(--c-danger);
+    font-size: 0.85rem;
+}
+
 /* collection list */
 .collection-list {
     list-style: none;

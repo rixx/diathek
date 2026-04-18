@@ -1,0 +1,31 @@
+<li id="place-{{ place.pk }}" class="place-row{% if not place.has_coords %} place-row--missing{% endif %}">
+    <div class="place-row-head">
+        <h2>{{ place.name }}</h2>
+        <small>{{ place.image_count }} Bild{{ place.image_count|pluralize:"er" }}</small>
+    </div>
+    <div class="place-row-coords">
+        {% if place.has_coords %}
+        <span class="place-coords">{{ place.latitude }}, {{ place.longitude }}</span>
+        <a class="place-coords-link"
+           href="https://www.google.com/maps/?q={{ place.latitude }},{{ place.longitude }}"
+           target="_blank"
+           rel="noopener noreferrer">Auf Karte zeigen &rarr;</a>
+        {% else %}
+        <span class="place-coords place-coords--missing">Keine Koordinaten hinterlegt</span>
+        {% endif %}
+    </div>
+    <form class="place-row-form"
+          hx-post="{% url 'place_set_coords' place.pk %}"
+          hx-target="#place-{{ place.pk }}"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="text"
+               name="raw"
+               autocomplete="off"
+               placeholder="Google-Maps-Link oder „49.546473, 8.640815“">
+        <button type="submit" class="btn btn-primary">Speichern</button>
+    </form>
+    {% if error %}
+    <p class="place-row-error" role="alert">{{ error }}</p>
+    {% endif %}
+</li>

@@ -1,0 +1,24 @@
+{% extends "core/base.html" %}
+
+{% block title %}Orte · diathek{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Orte</h1>
+</header>
+
+<p class="place-list-hint">
+    Ein Google-Maps-Link oder ein Koordinaten-Paar wie <code>49.546473, 8.640815</code> reicht –
+    die Koordinaten werden automatisch erkannt.
+</p>
+
+{% if places %}
+<ul class="place-list">
+    {% for place in places %}
+    {% include "core/_place_row.html" with place=place error=None %}
+    {% endfor %}
+</ul>
+{% else %}
+<p class="empty-state">Noch keine Orte angelegt.</p>
+{% endif %}
+{% endblock %}
