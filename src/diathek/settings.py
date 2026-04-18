@@ -1,0 +1,145 @@
+import secrets
+import sys
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent.parent.parent
+DATA_DIR = BASE_DIR / "data"
+LOG_DIR = DATA_DIR / "logs"
+MEDIA_ROOT = DATA_DIR / "media"
+STATIC_ROOT = BASE_DIR / "static.dist"
+
+for directory in (DATA_DIR, LOG_DIR, MEDIA_ROOT):
+    directory.mkdir(parents=True, exist_ok=True)
+
+DEBUG = "runserver" in sys.argv
+
+SECRET_KEY_FILE = DATA_DIR / "secret.key"
+if not SECRET_KEY_FILE.exists():
+    SECRET_KEY_FILE.write_text(secrets.token_urlsafe(64))
+    SECRET_KEY_FILE.chmod(0o600)
+SECRET_KEY = SECRET_KEY_FILE.read_text().strip()
+
+ALLOWED_HOSTS = ["*"]
+TIME_ZONE = "Europe/Berlin"
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.humanize",
+    "diathek.core",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "diathek.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ]
+        },
+    }
+]
+
+WSGI_APPLICATION = "diathek.wsgi.application"
+
+ATOMIC_REQUESTS = True
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(DATA_DIR / "db.sqlite3"),
+        "OPTIONS": {
+            "timeout": 20,
+            "init_command": (
+                "PRAGMA journal_mode=WAL;"
+                "PRAGMA synchronous=NORMAL;"
+                "PRAGMA foreign_keys=ON;"
+                "PRAGMA busy_timeout=20000;"
+                "PRAGMA temp_store=MEMORY;"
+                "PRAGMA mmap_size=134217728;"
+            ),
+            "transaction_mode": "IMMEDIATE",
+        },
+    }
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+LANGUAGE_CODE = "de"
+USE_I18N = False
+USE_TZ = True
+
+STATIC_URL = "static/"
+MEDIA_URL = "media/"
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    }
+}
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/"
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {"format": "[%(asctime)s] %(levelname)s %(name)s: %(message)s"}
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "default"},
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": str(LOG_DIR / "diathek.log"),
+            "formatter": "default",
+        },
+    },
+    "root": {"handlers": ["console", "file"], "level": "INFO"},
+    "loggers": {
+        "diathek": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        }
+    },
+}
+
+DEPLOY_FLAG_FILE = ""
