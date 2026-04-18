@@ -1,0 +1,122 @@
+{% load humanize %}
+<form id="image-form-{{ image.pk }}"
+      class="metadata-form{% if conflict %} conflict{% endif %}"
+      data-image-id="{{ image.pk }}"
+      data-version="{{ image.version }}"
+      hx-patch="{% url 'image_save' image.pk %}"
+      hx-headers='{"If-Match": "{{ image.version }}"}'
+      hx-target="this"
+      hx-swap="outerHTML">
+    {% csrf_token %}
+    {% if error %}
+    <p class="metadata-error" role="alert">{{ error }}</p>
+    {% endif %}
+    {% if conflict %}
+    <p class="metadata-conflict" role="alert">
+        Version hat sich geändert – aktuelle Werte wurden neu geladen.
+    </p>
+    {% endif %}
+
+    <label class="field">
+        <span>Ort</span>
+        <select name="place"
+                hx-patch="{% url 'image_save' image.pk %}"
+                hx-headers='{"If-Match": "{{ image.version }}"}'
+                hx-target="#image-form-{{ image.pk }}"
+                hx-swap="outerHTML"
+                hx-trigger="change"
+                hx-include="this">
+            <option value="">—</option>
+            {% for place in places %}
+            <option value="{{ place.pk }}"{% if image.place_id == place.pk %} selected{% endif %}>
+                {{ place.name }}{% if not place.has_coords %} ⚠{% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label class="field checkbox">
+        <input type="checkbox"
+               name="place_todo"
+               value="true"
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-vals='js:{"place_todo": this.checked ? "true" : "false"}'
+               hx-trigger="change"
+               {% if image.place_todo %}checked{% endif %}>
+        Ort unklar
+    </label>
+
+    <label class="field">
+        <span>Datum (freier Text, Parser folgt)</span>
+        <input type="text"
+               name="date_display"
+               value="{{ image.date_display }}"
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-trigger="change"
+               hx-preserve="true"
+               data-field="date_display"
+               placeholder="z. B. 1987-07 oder ~1985">
+    </label>
+
+    <label class="field checkbox">
+        <input type="checkbox"
+               name="date_todo"
+               value="true"
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-vals='js:{"date_todo": this.checked ? "true" : "false"}'
+               hx-trigger="change"
+               {% if image.date_todo %}checked{% endif %}>
+        Datum unklar
+    </label>
+
+    <label class="field checkbox">
+        <input type="checkbox"
+               name="needs_flip"
+               value="true"
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-vals='js:{"needs_flip": this.checked ? "true" : "false"}'
+               hx-trigger="change"
+               {% if image.needs_flip %}checked{% endif %}>
+        Spiegeln
+    </label>
+
+    <label class="field">
+        <span>Lightroom-Notiz</span>
+        <input type="text"
+               name="edit_todo"
+               value="{{ image.edit_todo }}"
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-trigger="change"
+               hx-preserve="true"
+               data-field="edit_todo"
+               placeholder="z. B. Rot reduzieren">
+    </label>
+
+    <label class="field">
+        <span>Beschreibung</span>
+        <textarea name="description"
+                  rows="6"
+                  hx-patch="{% url 'image_save' image.pk %}"
+                  hx-headers='{"If-Match": "{{ image.version }}"}'
+                  hx-target="#image-form-{{ image.pk }}"
+                  hx-swap="outerHTML"
+                  hx-trigger="focusout changed"
+                  hx-preserve="true"
+                  data-field="description">{{ image.description }}</textarea>
+    </label>
+</form>

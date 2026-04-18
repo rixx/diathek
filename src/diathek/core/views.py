@@ -3,15 +3,18 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Max
-from django.http import JsonResponse
+from django.db.models import F, Max
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.utils import timezone
+from django.views.decorators.http import require_http_methods, require_POST
 from PIL import UnidentifiedImageError
 
 from diathek.core.forms import ImportForm, RegistrationForm
-from diathek.core.models import Box, Image, InviteCode
+from diathek.core.metadata import MetadataError, parse_metadata_payload
+from diathek.core.models import Box, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
+from diathek.metadata.description import stamp_description
 
 
 def register(request, code):
@@ -236,3 +239,147 @@ def unsorted_assign(request):
         image.assign_to_box(box, sequence=base + offset, user=request.user)
 
     return JsonResponse({"moved": [str(img.uuid) for img in images], "box": box.name})
+
+
+def _get_request_data(request):
+    if request.method == "POST":
+        return request.POST
+    return QueryDict(request.body)
+
+
+def _neighbours(image):
+    siblings = list(
+        Image.objects.filter(box=image.box)
+        .order_by("sequence_in_box")
+        .values_list("pk", "sequence_in_box")
+    )
+    index = next((i for i, (pk, _) in enumerate(siblings) if pk == image.pk), 0)
+    prev_id = siblings[index - 1][0] if index > 0 else None
+    next_id = siblings[index + 1][0] if index < len(siblings) - 1 else None
+    return index + 1, len(siblings), prev_id, next_id
+
+
+def _metadata_context(image, request, *, conflict=False, error=None):
+    position, total, prev_id, next_id = _neighbours(image)
+    return {
+        "image": image,
+        "box": image.box,
+        "places": Place.objects.order_by("name"),
+        "position": position,
+        "total": total,
+        "prev_id": prev_id,
+        "next_id": next_id,
+        "conflict": conflict,
+        "error": error,
+        "precisions": Image._meta.get_field("date_precision").choices,
+        "request": request,
+    }
+
+
+def _render_fragment(request, image, *, status=200, conflict=False, error=None):
+    response = render(
+        request,
+        "core/_image_metadata.html",
+        _metadata_context(image, request, conflict=conflict, error=error),
+        status=status,
+    )
+    if status >= 400:
+        response["HX-Reswap"] = "outerHTML"
+        response["HX-Retarget"] = f"#image-form-{image.pk}"
+    if conflict:
+        response["X-Version-Conflict"] = "true"
+    return response
+
+
+@login_required
+def image_detail(request, box_uuid, image_id):
+    image = get_object_or_404(
+        Image.objects.select_related("box", "place"), pk=image_id, box__uuid=box_uuid
+    )
+    if image.box.archived:
+        return redirect("index")
+    context = _metadata_context(image, request)
+    return render(request, "core/detail.html", context)
+
+
+@login_required
+@require_http_methods(["PATCH", "POST"])
+def image_save(request, image_id):
+    data = _get_request_data(request)
+
+    expected_version_raw = request.headers.get("If-Match")
+    if expected_version_raw is None:
+        return HttpResponse("If-Match header fehlt.", status=428)
+    try:
+        expected_version = int(expected_version_raw)
+    except ValueError:
+        return HttpResponse("If-Match header ungültig.", status=428)
+
+    try:
+        updates = parse_metadata_payload(data)
+    except MetadataError as err:
+        image = get_object_or_404(
+            Image.objects.select_related("box", "place"), pk=image_id
+        )
+        return _render_fragment(request, image, status=400, error=str(err))
+
+    with transaction.atomic():
+        try:
+            locked = (
+                Image.objects.select_related("box", "place")
+                .select_for_update()
+                .get(pk=image_id)
+            )
+        except Image.DoesNotExist:
+            return HttpResponse("Bild nicht gefunden.", status=404)
+
+        if locked.box and locked.box.archived:
+            return HttpResponseForbidden("Box ist archiviert.")
+
+        if "description" in updates:
+            updates["description"] = stamp_description(
+                old=locked.description,
+                new=updates["description"],
+                author_name=request.user.name or request.user.username,
+                today=timezone.localdate(),
+            )
+
+        changed = _diff_updates(locked, updates)
+        if not changed:
+            return _render_fragment(request, locked)
+
+        before = locked._snapshot()
+
+        rowcount = Image.objects.filter(pk=image_id, version=expected_version).update(
+            **changed, version=F("version") + 1, updated_at=timezone.now()
+        )
+        if rowcount == 0:
+            locked.refresh_from_db()
+            return _render_fragment(request, locked, status=409, conflict=True)
+
+        locked.refresh_from_db()
+        after = locked._snapshot()
+        changed_keys = [k for k in after if before.get(k) != after.get(k)]
+        locked.log_action(
+            "image.change",
+            user=request.user,
+            before={k: before[k] for k in changed_keys},
+            after={k: after[k] for k in changed_keys},
+        )
+
+    return _render_fragment(request, locked)
+
+
+def _diff_updates(image, updates):
+    changed = {}
+    for key, value in updates.items():
+        stored = getattr(image, key)
+        if stored != value:
+            changed[key] = value
+    return changed
+
+
+@login_required
+def image_fragment(request, image_id):
+    image = get_object_or_404(Image.objects.select_related("box", "place"), pk=image_id)
+    return _render_fragment(request, image)

@@ -1,0 +1,69 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ image.filename }} · {{ box.name }} · diathek{% endblock %}
+
+{% block extra_head %}
+<style>
+.detail-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1rem; align-items: start; }
+.detail-header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; }
+.detail-header h1 { margin: 0; font-size: 1.1rem; }
+.detail-header nav { display: flex; gap: 0.5rem; }
+.detail-main { position: relative; }
+.detail-image { max-width: 100%; max-height: calc(100vh - 160px); display: block; margin: 0 auto; background: #000; }
+.detail-nav { display: flex; justify-content: space-between; margin-top: 0.5rem; }
+.detail-nav a { font-size: 1.25rem; padding: 0.5rem 0.75rem; text-decoration: none; border: 1px solid #ccc; }
+.detail-nav a[aria-disabled="true"] { opacity: 0.3; pointer-events: none; }
+.metadata-form { display: grid; gap: 0.5rem; }
+.metadata-form .field { display: grid; gap: 0.2rem; }
+.metadata-form .field.checkbox { grid-template-columns: auto 1fr; align-items: center; gap: 0.5rem; }
+.metadata-form select, .metadata-form input[type=text], .metadata-form textarea { width: 100%; box-sizing: border-box; }
+.metadata-form .metadata-error { color: #b00; }
+.metadata-form .metadata-conflict { background: #ffd; padding: 0.3rem 0.5rem; }
+.metadata-form.conflict { outline: 2px solid #d90; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="detail-layout">
+    <header class="detail-header">
+        <h1><a href="{% url 'index' %}">{{ box.name }}</a> · Bild {{ position }} von {{ total }}</h1>
+        <nav>
+            <a href="{% if prev_id %}{% url 'image_detail' box.uuid prev_id %}{% else %}#{% endif %}"
+               {% if not prev_id %}aria-disabled="true"{% endif %}>&larr;</a>
+            <a href="{% if next_id %}{% url 'image_detail' box.uuid next_id %}{% else %}#{% endif %}"
+               {% if not next_id %}aria-disabled="true"{% endif %}>&rarr;</a>
+        </nav>
+    </header>
+
+    <section class="detail-main">
+        {% if image.thumb_detail %}
+        <img class="detail-image"
+             src="{{ image.thumb_detail.url }}"
+             data-full="{% if image.image %}{{ image.image.url }}{% endif %}"
+             alt="{{ image.filename }}">
+        {% elif image.image %}
+        <img class="detail-image" src="{{ image.image.url }}" alt="{{ image.filename }}">
+        {% else %}
+        <p>Kein Bild verfügbar.</p>
+        {% endif %}
+    </section>
+
+    <aside>
+        {% include "core/_image_metadata.html" %}
+    </aside>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(function () {
+    const img = document.querySelector(".detail-image[data-full]");
+    if (!img) return;
+    const full = img.dataset.full;
+    if (!full) return;
+    const preloader = new Image();
+    preloader.addEventListener("load", () => { img.src = full; });
+    preloader.src = full;
+})();
+</script>
+{% endblock %}
