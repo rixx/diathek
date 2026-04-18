@@ -24,25 +24,36 @@ def test_box_progress_empty_box_returns_zeroes():
 
 @pytest.mark.django_db
 def test_box_progress_counts_each_todo_category():
+    import datetime
+
+    from tests.factories import PlaceFactory
+
     box = BoxFactory()
     ImageFactory(box=box, sequence_in_box=1, place_todo=True)
     ImageFactory(box=box, sequence_in_box=2, date_todo=True)
     ImageFactory(box=box, sequence_in_box=3, needs_flip=True)
     ImageFactory(box=box, sequence_in_box=4, edit_todo="reduce red")
-    ImageFactory(box=box, sequence_in_box=5)  # done
-    from tests.factories import PlaceFactory
-
-    ImageFactory(box=box, sequence_in_box=6, place=PlaceFactory())  # tagged & done
+    ImageFactory(box=box, sequence_in_box=5)  # untagged, no todos → NOT done
+    ImageFactory(box=box, sequence_in_box=6, place=PlaceFactory())  # only place
+    ImageFactory(
+        box=box,
+        sequence_in_box=7,
+        place=PlaceFactory(),
+        date_earliest=datetime.date(1987, 6, 1),
+        date_latest=datetime.date(1987, 8, 31),
+    )  # tagged & done
 
     progress = box.progress
 
-    assert progress["total"] == 6
+    assert progress["total"] == 7
     assert progress["todo_place"] == 1
     assert progress["todo_date"] == 1
     assert progress["todo_flip"] == 1
     assert progress["todo_edit"] == 1
-    assert progress["tagged"] == 1
-    assert progress["done"] == 2
+    # "tagged" = has at least one of place/date set
+    assert progress["tagged"] == 2
+    # "done" = place AND date set AND no open todos
+    assert progress["done"] == 1
 
 
 @pytest.mark.django_db

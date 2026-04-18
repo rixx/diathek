@@ -49,7 +49,9 @@ def test_state_reports_versions_and_progress_for_box(auth_client):
     payload = response.json()
     assert payload["versions"][str(first.pk)] == first.version
     assert payload["versions"][str(second.pk)] == second.version
-    assert payload["progress"] == {"total": 2, "tagged": 0, "open_todos": 1}
+    # open_todos = total - done; under the new "done" definition, neither image
+    # is done (no place or date set), so both count as open
+    assert payload["progress"] == {"total": 2, "tagged": 0, "open_todos": 2}
 
 
 @pytest.mark.django_db
