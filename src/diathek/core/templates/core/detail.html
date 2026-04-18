@@ -294,6 +294,7 @@
     const driverEl = document.querySelector("[data-driver-indicator]");
     const driverActionBtn = document.querySelector("[data-driver-action]");
     const followCb = document.querySelector("[data-follow-driver]");
+    const followLabel = followCb ? followCb.closest(".follow-driver") : null;
     const toast = document.querySelector("[data-driver-toast]");
     const toastMsg = document.querySelector("[data-driver-toast-msg]");
     const toastJump = document.querySelector("[data-driver-toast-jump]");
@@ -353,6 +354,7 @@
                 driverActionBtn.textContent = "Übernehmen";
                 driverActionBtn.dataset.driverAction = "claim";
             }
+            if (followLabel) followLabel.hidden = false;
             clearToast();
             return;
         }
@@ -364,6 +366,7 @@
                 driverActionBtn.textContent = "Freigeben";
                 driverActionBtn.dataset.driverAction = "release";
             }
+            if (followLabel) followLabel.hidden = true;
             clearToast();
             if (driver.image_id != null && String(driver.image_id) !== currentImageId) {
                 syncDriverPosition();
@@ -373,6 +376,7 @@
         driverEl.textContent = `${driver.user} steuert`;
         driverEl.dataset.driverState = "other";
         if (driverActionBtn) driverActionBtn.hidden = true;
+        if (followLabel) followLabel.hidden = false;
         const url = imageUrlFor(driver);
         const shouldFollow =
             followCb && followCb.checked && url && String(driver.image_id) !== currentImageId;
