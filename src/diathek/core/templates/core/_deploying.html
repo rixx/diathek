@@ -1,0 +1,29 @@
+{% url 'healthz' as healthz_url %}
+<span class="site-nav-deploy site-nav-deploying" role="status" aria-live="polite"
+      data-healthz-url="{{ healthz_url }}">
+    Deploye<span class="site-nav-deploying-dots" aria-hidden="true"></span>
+</span>
+<script>
+(function () {
+    const el = document.currentScript.previousElementSibling;
+    const url = el.dataset.healthzUrl;
+    let ok = 0;
+    function poll() {
+        fetch(url, { cache: "no-store" })
+            .then((r) => {
+                if (r.ok) {
+                    ok += 1;
+                    if (ok >= 3) {
+                        window.location.reload();
+                        return;
+                    }
+                } else {
+                    ok = 0;
+                }
+            })
+            .catch(() => { ok = 0; })
+            .finally(() => { setTimeout(poll, 2000); });
+    }
+    setTimeout(poll, 5000);
+})();
+</script>

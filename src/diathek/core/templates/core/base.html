@@ -24,7 +24,8 @@
         <a href="{% url 'collection_list' %}">Sammlungen</a>
         {% if user.is_superuser and deploy_enabled %}
         <form method="post" action="{% url 'deploy' %}" class="inline-form site-nav-deploy"
-              onsubmit="return confirm('Neue Version jetzt deployen?');">
+              hx-post="{% url 'deploy' %}" hx-swap="outerHTML"
+              hx-confirm="Neue Version jetzt deployen?">
             {% csrf_token %}
             <button type="submit" class="btn btn-deploy" title="Neue Version deployen">Deploy</button>
         </form>

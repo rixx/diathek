@@ -987,12 +987,24 @@ def trigger_deploy(request):
         messages.error(
             request, "Deploy ist nicht konfiguriert (DEPLOY_FLAG_FILE fehlt)."
         )
+        if request.headers.get("HX-Request"):
+            return HttpResponse(
+                status=204, headers={"HX-Redirect": reverse("index")}
+            )
         return redirect("index")
 
     target = Path(flag_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(f"{request.user.username} {timezone.now().isoformat()}\n")
+
+    if request.headers.get("HX-Request"):
+        return render(request, "core/_deploying.html")
+
     messages.success(
         request, "Deploy wurde angestoßen. Der Neustart erfolgt automatisch."
     )
     return redirect(request.META.get("HTTP_REFERER") or reverse("index"))
+
+
+def healthz(request):
+    return JsonResponse({"status": "ok"})

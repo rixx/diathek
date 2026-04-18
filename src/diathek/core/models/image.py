@@ -4,6 +4,8 @@ from datetime import timedelta
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 
 from diathek.core.models.base import BaseModel
 from diathek.core.models.box import Box
@@ -217,3 +219,11 @@ class Image(BaseModel):
                     default_storage.delete(name)
 
             transaction.on_commit(_cleanup)
+
+
+@receiver(post_delete, sender=Image)
+def image_delete_files(sender, instance, **kwargs):
+    for attr in ("image", "thumb_small", "thumb_detail"):
+        field_file = getattr(instance, attr)
+        if field_file:
+            field_file.delete(save=False)

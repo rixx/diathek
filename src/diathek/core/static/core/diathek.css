@@ -128,6 +128,26 @@ h1, h2, h3 {
 .site-nav-deploy + .site-nav-user {
     margin-left: var(--space-lg);
 }
+.site-nav-deploying {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--c-accent-contrast);
+    opacity: 0.9;
+}
+.site-nav-deploying-dots::after {
+    content: "…";
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+    animation: site-nav-deploying-dots 1.2s steps(4, end) infinite;
+}
+@keyframes site-nav-deploying-dots {
+    0%   { content: ""; }
+    25%  { content: "."; }
+    50%  { content: ".."; }
+    75%  { content: "..."; }
+    100% { content: ""; }
+}
 .site-nav-user {
     margin-left: auto;
     font-size: 0.85rem;

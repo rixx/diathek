@@ -146,4 +146,4 @@ LOGGING = {
     },
 }
 
-DEPLOY_FLAG_FILE = ""
+DEPLOY_FLAG_FILE = str(DATA_DIR / "deploy.flag")

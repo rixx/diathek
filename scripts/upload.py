@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["httpx"]
+# dependencies = ["httpx", "tqdm"]
 # ///
 """Upload image files to diathek's /api/upload/ endpoint, one at a time.
 
@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import httpx
+from tqdm import tqdm
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
 
@@ -75,7 +76,9 @@ def upload_one(client, base_url, path):
 
 def main():
     ap = argparse.ArgumentParser(description="Upload images to diathek one at a time.")
-    ap.add_argument("--url", required=True, help="base URL, e.g. https://diathek.example.com")
+    ap.add_argument(
+        "--url", required=True, help="base URL, e.g. https://diathek.example.com"
+    )
     ap.add_argument("--user", required=True)
     ap.add_argument("--recursive", "-r", action="store_true")
     ap.add_argument("paths", nargs="+")
@@ -93,28 +96,27 @@ def main():
 
     with httpx.Client(timeout=300.0, follow_redirects=True) as client:
         login(client, base, args.user, password)
-        errors = 0
-        for i, path in enumerate(files, start=1):
+        errors = skipped = 0
+        bar = tqdm(files, unit="file", desc="uploading")
+        for path in bar:
+            bar.set_postfix_str(path.name, refresh=False)
             resp = upload_one(client, base, path)
             if resp.status_code == 200:
                 payload = resp.json()
-                if payload["created"]:
-                    note = f"ok ({payload['created'][0]['uuid']})"
-                elif payload["skipped"]:
-                    note = "skipped (duplicate)"
-                else:
-                    note = "no-op"
-                print(f"[{i}/{len(files)}] {path.name}: {note}")
+                if payload["skipped"]:
+                    skipped += 1
+                    tqdm.write(f"skipped (duplicate): {path.name}")
             else:
                 errors += 1
                 try:
                     msg = resp.json().get("error", resp.text)
                 except ValueError:
                     msg = resp.text
-                print(
-                    f"[{i}/{len(files)}] {path.name}: ERROR {resp.status_code} {msg}",
-                    file=sys.stderr,
+                tqdm.write(
+                    f"ERROR {resp.status_code} {path.name}: {msg}", file=sys.stderr
                 )
+            bar.set_postfix(errors=errors, skipped=skipped, refresh=False)
+        bar.close()
     return 1 if errors else 0
 
 

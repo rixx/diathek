@@ -120,6 +120,67 @@ def test_image_delete_originals_and_details_noop_when_no_files():
     assert image.version == version_before
 
 
+@pytest.mark.django_db
+def test_image_delete_removes_all_file_variants_from_storage():
+    from pathlib import Path
+
+    image = ImageFactory()
+    image.image.save("scan.jpg", ContentFile(b"original"), save=False)
+    image.thumb_detail.save("detail.webp", ContentFile(b"detail"), save=False)
+    image.thumb_small.save("thumb.webp", ContentFile(b"thumb"), save=False)
+    image.save()
+    paths = [
+        Path(image.image.path),
+        Path(image.thumb_detail.path),
+        Path(image.thumb_small.path),
+    ]
+    assert all(p.exists() for p in paths)
+
+    image.delete()
+
+    assert not any(p.exists() for p in paths)
+
+
+@pytest.mark.django_db
+def test_image_queryset_delete_removes_files_from_storage():
+    from pathlib import Path
+
+    image = ImageFactory()
+    image.image.save("scan.jpg", ContentFile(b"original"), save=False)
+    image.thumb_small.save("thumb.webp", ContentFile(b"thumb"), save=False)
+    image.save()
+    paths = [Path(image.image.path), Path(image.thumb_small.path)]
+
+    Image.objects.filter(pk=image.pk).delete()
+
+    assert not any(p.exists() for p in paths)
+
+
+@pytest.mark.django_db
+def test_image_cascade_delete_from_box_removes_files_from_storage():
+    from pathlib import Path
+
+    box = BoxFactory()
+    image = ImageFactory(box=box)
+    image.image.save("scan.jpg", ContentFile(b"original"), save=False)
+    image.save()
+    path = Path(image.image.path)
+    assert path.exists()
+
+    box.delete()
+
+    assert not path.exists()
+
+
+@pytest.mark.django_db
+def test_image_delete_without_files_does_not_raise():
+    image = ImageFactory()
+
+    image.delete()
+
+    assert not Image.objects.filter(pk=image.pk).exists()
+
+
 def test_upload_paths_use_box_uuid_and_image_uuid():
     box_uuid = uuid.UUID("00000000-0000-0000-0000-000000000001")
     image_uuid = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
