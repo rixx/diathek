@@ -469,6 +469,20 @@ def test_fragment_for_archived_box_image_has_no_box_neighbours(auth_client):
 
 
 @pytest.mark.django_db
+def test_image_detail_renders_driver_controls_and_follow_toggle(auth_client, image):
+    response = auth_client.get(reverse("image_detail", args=[image.box.uuid, image.pk]))
+
+    content = response.content.decode()
+    assert f'data-driver-url="{reverse("driver_state")}"' in content
+    assert 'data-current-user-display="Karin"' in content
+    assert "data-driver-action" in content
+    assert "data-follow-driver" in content
+    assert "data-driver-toast" in content
+    assert "Springen" in content
+    assert "Bleiben" in content
+
+
+@pytest.mark.django_db
 def test_image_detail_renders_nav_data_attributes_and_help_overlay(auth_client):
     box_a = BoxFactory(name="A", sort_order=0)
     box_b = BoxFactory(name="B", sort_order=1)

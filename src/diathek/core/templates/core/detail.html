@@ -8,8 +8,27 @@
 .detail-header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; }
 .detail-header h1 { margin: 0; font-size: 1.1rem; }
 .detail-header nav { display: flex; gap: 0.5rem; }
-.detail-status { display: flex; gap: 0.75rem; align-items: baseline; font-size: 0.85rem; color: #555; }
+.detail-status { display: flex; gap: 0.75rem; align-items: baseline; font-size: 0.85rem; color: #555; flex-wrap: wrap; }
 .detail-status-users { font-style: italic; }
+.detail-status-driver[data-driver-state="me"] { color: #0a6; font-weight: 600; }
+.detail-status-driver[data-driver-state="other"] { color: #036; font-weight: 600; }
+.driver-action { font-size: 0.8rem; padding: 0.1rem 0.5rem; cursor: pointer; }
+.follow-driver { font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.25rem; }
+.driver-toast {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    background: #fff;
+    border: 1px solid #036;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    z-index: 50;
+}
+.driver-toast[hidden] { display: none; }
+.driver-toast button { font-size: 0.85rem; padding: 0.15rem 0.5rem; cursor: pointer; }
 .detail-main { position: relative; }
 .detail-image { max-width: 100%; max-height: calc(100vh - 160px); display: block; margin: 0 auto; background: #000; }
 .detail-nav { display: flex; justify-content: space-between; margin-top: 0.5rem; }
@@ -131,7 +150,9 @@
      data-box-uuid="{{ box.uuid }}"
      data-current-image-id="{{ image.pk }}"
      data-state-url="{% url 'state' %}"
+     data-driver-url="{% url 'driver_state' %}"
      data-fragment-url="{% url 'image_fragment' image.pk %}"
+     data-current-user-display="{{ request.user.name|default:request.user.username }}"
      {% if prev_id %}data-prev-image-url="{% url 'image_detail' box.uuid prev_id %}"{% endif %}
      {% if next_id %}data-next-image-url="{% url 'image_detail' box.uuid next_id %}"{% endif %}
      {% if prev_box_image %}data-prev-box-url="{% url 'image_detail' prev_box_image.box.uuid prev_box_image.pk %}"{% endif %}
@@ -140,7 +161,12 @@
         <h1><a href="{% url 'index' %}">{{ box.name }}</a> · Bild {{ position }} von {{ total }}</h1>
         <div class="detail-status">
             <span class="detail-status-progress" data-progress-indicator></span>
-            <span class="detail-status-driver" data-driver-indicator>niemand steuert</span>
+            <span class="detail-status-driver" data-driver-indicator data-driver-state="none">niemand steuert</span>
+            <button type="button" class="driver-action" data-driver-action="claim" hidden>Übernehmen</button>
+            <label class="follow-driver">
+                <input type="checkbox" data-follow-driver>
+                Fahrer folgen
+            </label>
             <span class="detail-status-users" data-active-users></span>
         </div>
         <nav>
@@ -169,6 +195,12 @@
     </aside>
 </div>
 
+<div class="driver-toast" data-driver-toast hidden role="status" aria-live="polite">
+    <span data-driver-toast-msg></span>
+    <button type="button" data-driver-toast-jump>Springen</button>
+    <button type="button" data-driver-toast-stay>Bleiben</button>
+</div>
+
 <div class="shortcut-help" data-shortcut-help hidden role="dialog" aria-modal="true" aria-labelledby="shortcut-help-title">
     <div class="shortcut-help-panel">
         <h2 id="shortcut-help-title">Tastaturkürzel</h2>
@@ -195,17 +227,37 @@
     const root = document.querySelector("[data-detail-root]");
     if (!root) return;
     const stateUrl = root.dataset.stateUrl;
+    const driverUrl = root.dataset.driverUrl;
     const boxUuid = root.dataset.boxUuid;
     const fragmentUrl = root.dataset.fragmentUrl;
     const currentImageId = String(root.dataset.currentImageId || "");
+    const currentUserDisplay = root.dataset.currentUserDisplay || "";
     if (!stateUrl || !boxUuid || !currentImageId) return;
 
     const driverEl = document.querySelector("[data-driver-indicator]");
+    const driverActionBtn = document.querySelector("[data-driver-action]");
+    const followCb = document.querySelector("[data-follow-driver]");
+    const toast = document.querySelector("[data-driver-toast]");
+    const toastMsg = document.querySelector("[data-driver-toast-msg]");
+    const toastJump = document.querySelector("[data-driver-toast-jump]");
+    const toastStay = document.querySelector("[data-driver-toast-stay]");
     const progressEl = document.querySelector("[data-progress-indicator]");
     const usersEl = document.querySelector("[data-active-users]");
+    const csrfInput = document.querySelector("[name=csrfmiddlewaretoken]");
+    const csrfToken = csrfInput ? csrfInput.value : "";
     const POLL_INTERVAL_MS = 1000;
+    const FOLLOW_KEY = "diathek.followDriver";
     let pollTimer = null;
     let inFlight = false;
+    let pendingJumpUrl = null;
+    let syncingDriver = false;
+
+    if (followCb) {
+        followCb.checked = localStorage.getItem(FOLLOW_KEY) === "1";
+        followCb.addEventListener("change", () => {
+            localStorage.setItem(FOLLOW_KEY, followCb.checked ? "1" : "0");
+        });
+    }
 
     function isTypingTarget(el) {
         if (!el) return false;
@@ -213,15 +265,144 @@
         return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
     }
 
+    function isUserTyping() {
+        return isTypingTarget(document.activeElement);
+    }
+
+    function imageUrlFor(driver) {
+        if (!driver || !driver.box_uuid || driver.image_id == null) return null;
+        return `/box/${driver.box_uuid}/${driver.image_id}/`;
+    }
+
+    function clearToast() {
+        if (toast) toast.hidden = true;
+        pendingJumpUrl = null;
+    }
+
+    function showFollowToast(driver, url) {
+        if (!toast || !toastMsg) return;
+        pendingJumpUrl = url;
+        toastMsg.textContent = `${driver.user} ist zu Bild ${driver.image_id} gewechselt.`;
+        toast.hidden = false;
+    }
+
     function renderDriver(driver) {
         if (!driverEl) return;
         if (!driver) {
             driverEl.textContent = "niemand steuert";
-            driverEl.dataset.driverUser = "";
+            driverEl.dataset.driverState = "none";
+            if (driverActionBtn) {
+                driverActionBtn.hidden = false;
+                driverActionBtn.textContent = "Übernehmen";
+                driverActionBtn.dataset.driverAction = "claim";
+            }
+            clearToast();
+            return;
+        }
+        if (driver.user === currentUserDisplay) {
+            driverEl.textContent = "Du steuerst";
+            driverEl.dataset.driverState = "me";
+            if (driverActionBtn) {
+                driverActionBtn.hidden = false;
+                driverActionBtn.textContent = "Freigeben";
+                driverActionBtn.dataset.driverAction = "release";
+            }
+            clearToast();
+            if (driver.image_id != null && String(driver.image_id) !== currentImageId) {
+                syncDriverPosition();
+            }
             return;
         }
         driverEl.textContent = `${driver.user} steuert`;
-        driverEl.dataset.driverUser = driver.user;
+        driverEl.dataset.driverState = "other";
+        if (driverActionBtn) driverActionBtn.hidden = true;
+        const url = imageUrlFor(driver);
+        const shouldFollow =
+            followCb && followCb.checked && url && String(driver.image_id) !== currentImageId;
+        if (!shouldFollow) { clearToast(); return; }
+        if (isUserTyping()) {
+            showFollowToast(driver, url);
+        } else {
+            clearToast();
+            window.location.href = url;
+        }
+    }
+
+    async function syncDriverPosition() {
+        if (syncingDriver) return;
+        syncingDriver = true;
+        try {
+            const body = new URLSearchParams({
+                box_uuid: boxUuid,
+                image_id: currentImageId,
+            });
+            await fetch(driverUrl, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body,
+            });
+        } catch (err) {
+            if (err.name !== "AbortError") throw err;
+        } finally {
+            syncingDriver = false;
+        }
+    }
+
+    async function claimDriver() {
+        const body = new URLSearchParams({
+            box_uuid: boxUuid,
+            image_id: currentImageId,
+        });
+        const res = await fetch(driverUrl, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body,
+        });
+        if (res.status === 409) {
+            const payload = await res.json().catch(() => ({}));
+            alert(`${payload.driver || "Jemand anderes"} steuert bereits.`);
+            return;
+        }
+        if (res.ok) {
+            const payload = await res.json();
+            renderDriver(payload.driver);
+        }
+    }
+
+    async function releaseDriver() {
+        const res = await fetch(driverUrl, {
+            method: "DELETE",
+            headers: {"X-CSRFToken": csrfToken},
+        });
+        if (res.ok) {
+            const payload = await res.json();
+            renderDriver(payload.driver);
+        }
+    }
+
+    if (driverActionBtn) {
+        driverActionBtn.addEventListener("click", () => {
+            if (driverActionBtn.dataset.driverAction === "release") {
+                releaseDriver();
+            } else {
+                claimDriver();
+            }
+        });
+    }
+
+    if (toastJump) {
+        toastJump.addEventListener("click", () => {
+            if (pendingJumpUrl) window.location.href = pendingJumpUrl;
+        });
+    }
+    if (toastStay) {
+        toastStay.addEventListener("click", clearToast);
     }
 
     function renderProgress(progress) {

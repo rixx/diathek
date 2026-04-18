@@ -559,6 +559,70 @@ def state(request):
     )
 
 
+def _driver_state_snapshot():
+    state_row = DriverState.objects.select_related(
+        "driver", "current_box", "current_image"
+    ).get(pk=1)
+    return {"driver": _driver_payload(state_row)}
+
+
+def _resolve_driver_targets(data):
+    box = None
+    image = None
+    box_uuid = (data.get("box_uuid") or "").strip()
+    if box_uuid:
+        box = Box.objects.filter(uuid=box_uuid).first()
+    image_id_raw = (data.get("image_id") or "").strip()
+    if image_id_raw:
+        try:
+            image = Image.objects.filter(pk=int(image_id_raw)).first()
+        except ValueError:
+            image = None
+    return box, image
+
+
+def _release_driver_seat(user):
+    with transaction.atomic():
+        state_row = DriverState.objects.select_for_update().get(pk=1)
+        if state_row.driver_id == user.pk:
+            state_row.driver = None
+            state_row.save()
+
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def driver_state(request):
+    now = timezone.now()
+    _bump_last_poll(request.user, now)
+
+    data = _get_request_data(request)
+
+    if request.method == "DELETE" or data.get("release") == "true":
+        _release_driver_seat(request.user)
+        return JsonResponse(_driver_state_snapshot())
+
+    box, image = _resolve_driver_targets(data)
+
+    with transaction.atomic():
+        state_row = (
+            DriverState.objects.select_related("driver").select_for_update().get(pk=1)
+        )
+        active = state_row.active_driver
+        if active is not None and active.pk != request.user.pk:
+            return JsonResponse(
+                {"error": "occupied", "driver": active.name or active.username},
+                status=409,
+            )
+        state_row.driver = request.user
+        if box is not None:
+            state_row.current_box = box
+        if image is not None:
+            state_row.current_image = image
+        state_row.save()
+
+    return JsonResponse(_driver_state_snapshot())
+
+
 @login_required
 def place_autocomplete(request):
     q = request.GET.get("q", "").strip()

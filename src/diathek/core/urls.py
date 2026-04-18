@@ -22,4 +22,5 @@ urlpatterns = [
     ),
     path("api/autocomplete/date/", views.date_autocomplete, name="date_autocomplete"),
     path("api/state/", views.state, name="state"),
+    path("api/driver/", views.driver_state, name="driver_state"),
 ]
