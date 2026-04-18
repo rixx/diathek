@@ -12,6 +12,21 @@ class MetadataError(ValueError):
 
 BOOL_FIELDS = ("place_todo", "date_todo", "needs_flip")
 TEXT_FIELDS = ("edit_todo",)
+BATCH_ACTIONS = (
+    "place",
+    "date_display",
+    "place_todo",
+    "date_todo",
+    "needs_flip",
+    "edit_todo",
+    "clear_todos",
+)
+BATCH_TODO_CLEAR = {
+    "place_todo": False,
+    "date_todo": False,
+    "needs_flip": False,
+    "edit_todo": "",
+}
 
 _TRUE_VALUES = {"1", "true", "True", "on", "yes"}
 _FALSE_VALUES = {"0", "false", "False", "off", "no", ""}
@@ -77,3 +92,26 @@ def parse_metadata_payload(data):
         updates["description"] = data["description"]
 
     return updates
+
+
+def parse_batch_payload(data):
+    """Translate a batch-action POST body into ``(action, updates)``.
+
+    `updates` is a dict of model-field updates that the caller can apply to each
+    selected image. The `place` action returns ``{"place": "<raw text>"}`` —
+    place resolution still happens in the view because it needs the acting
+    user, just like the single-image save path.
+    """
+    action = data.get("action", "")
+    if action not in BATCH_ACTIONS:
+        raise MetadataError(f"Unbekannte Aktion: {action!r}")
+
+    if action == "place":
+        return action, {"place": data.get("place", "").strip()}
+    if action == "date_display":
+        return action, _parse_date_display(data.get("date_display", ""))
+    if action in BOOL_FIELDS:
+        return action, {action: _parse_bool(data.get("value", ""))}
+    if action == "edit_todo":
+        return action, {"edit_todo": data.get("value", "")}
+    return action, dict(BATCH_TODO_CLEAR)

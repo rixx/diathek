@@ -13,7 +13,11 @@ from django.views.decorators.http import require_http_methods, require_POST
 from PIL import UnidentifiedImageError
 
 from diathek.core.forms import ImportForm, RegistrationForm
-from diathek.core.metadata import MetadataError, parse_metadata_payload
+from diathek.core.metadata import (
+    MetadataError,
+    parse_batch_payload,
+    parse_metadata_payload,
+)
 from diathek.core.models import Box, DriverState, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
@@ -489,6 +493,60 @@ def _diff_updates(image, updates):
         if stored != value:
             changed[key] = value
     return changed
+
+
+@login_required
+@require_POST
+def box_batch(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid)
+    if box.archived:
+        return JsonResponse({"error": "Box ist archiviert."}, status=403)
+
+    raw_ids = request.POST.getlist("image_ids")
+    image_ids = []
+    for raw in raw_ids:
+        try:
+            image_ids.append(int(raw))
+        except ValueError:
+            return JsonResponse({"error": "Ungültige Bild-ID im Batch."}, status=400)
+    if not image_ids:
+        return JsonResponse(
+            {"error": "Mindestens ein Bild muss ausgewählt sein."}, status=400
+        )
+
+    try:
+        action, updates = parse_batch_payload(request.POST)
+    except MetadataError as err:
+        return JsonResponse({"error": str(err)}, status=400)
+
+    with transaction.atomic():
+        images = list(
+            Image.objects.select_for_update()
+            .select_related("box", "place")
+            .filter(box=box, pk__in=image_ids)
+        )
+        if len(images) != len(set(image_ids)):
+            return JsonResponse(
+                {"error": "Einige Bilder gehören nicht zu dieser Box."}, status=400
+            )
+
+        if action == "place":
+            place = _resolve_place(updates["place"], user=request.user)
+            updates = {"place": place}
+
+        updated = 0
+        for image in images:
+            changed = False
+            for field, value in updates.items():
+                if getattr(image, field) != value:
+                    setattr(image, field, value)
+                    changed = True
+            if not changed:
+                continue
+            image.save(user=request.user)
+            updated += 1
+
+    return JsonResponse({"updated": updated, "action": action})
 
 
 @login_required

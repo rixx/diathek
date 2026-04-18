@@ -115,6 +115,32 @@
 .date-preview { font-size: 0.8rem; margin: 0.25rem 0 0; color: #555; min-height: 1.2em; }
 .date-preview.error { color: #b00; }
 
+.todo-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+.todo-modal[hidden] { display: none; }
+.todo-modal-panel {
+    background: #fff;
+    color: #222;
+    padding: 1.5rem;
+    max-width: 24rem;
+    width: 100%;
+    border-radius: 0.25rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    display: grid;
+    gap: 0.75rem;
+}
+.todo-modal-panel h2 { margin: 0; font-size: 1rem; }
+.todo-modal-panel label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.95rem; }
+.todo-modal-panel input[type=text] { width: 100%; box-sizing: border-box; padding: 0.25rem; }
+.todo-modal-panel .todo-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
 .shortcut-help {
     position: fixed;
     inset: 0;
@@ -197,6 +223,23 @@
     </aside>
 </div>
 
+<div class="todo-modal" data-todo-modal hidden role="dialog" aria-modal="true" aria-labelledby="todo-modal-title">
+    <div class="todo-modal-panel">
+        <h2 id="todo-modal-title">Todos</h2>
+        <label><input type="checkbox" data-todo-field="place_todo"> Ort unklar</label>
+        <label><input type="checkbox" data-todo-field="date_todo"> Datum unklar</label>
+        <label><input type="checkbox" data-todo-field="needs_flip"> Spiegeln</label>
+        <label>
+            <span>Lightroom-Notiz</span>
+            <input type="text" data-todo-field="edit_todo">
+        </label>
+        <div class="todo-modal-actions">
+            <button type="button" data-todo-modal-cancel>Abbrechen</button>
+            <button type="button" data-todo-modal-apply>Speichern</button>
+        </div>
+    </div>
+</div>
+
 <div class="driver-toast" data-driver-toast hidden role="status" aria-live="polite">
     <span data-driver-toast-msg></span>
     <button type="button" data-driver-toast-jump>Springen</button>
@@ -217,6 +260,7 @@
             <dt>n</dt><dd>Beschreibung fokussieren</dd>
             <dt>Leer</dt><dd>„Ort unklar“ umschalten</dd>
             <dt>f</dt><dd>„Spiegeln“ umschalten</dd>
+            <dt>t</dt><dd>Todo-Menü öffnen</dd>
             <dt>?</dt><dd>Diese Hilfe</dd>
             <dt>Esc</dt><dd>Fokus aufheben / schließen</dd>
         </dl>
@@ -493,6 +537,9 @@
     const root = document.querySelector("[data-detail-root]");
     if (!root) return;
     const help = document.querySelector("[data-shortcut-help]");
+    const todoModal = document.querySelector("[data-todo-modal]");
+    const csrfInput = document.querySelector("[name=csrfmiddlewaretoken]");
+    const csrfToken = csrfInput ? csrfInput.value : "";
 
     function isTypingTarget(el) {
         if (!el) return false;
@@ -520,6 +567,78 @@
     function hideHelp() { if (help) help.hidden = true; }
     function helpVisible() { return help && !help.hidden; }
 
+    function currentForm() { return root.querySelector("form.metadata-form"); }
+    function currentVersion() {
+        const form = currentForm();
+        return form ? form.dataset.version : "0";
+    }
+    function saveUrl() {
+        const form = currentForm();
+        return form ? form.getAttribute("hx-patch") : null;
+    }
+
+    function syncTodoModalFromForm() {
+        if (!todoModal) return;
+        const form = currentForm();
+        if (!form) return;
+        todoModal.querySelectorAll("[data-todo-field]").forEach(el => {
+            const name = el.dataset.todoField;
+            const src = form.querySelector(`[name="${name}"]`);
+            if (!src) return;
+            if (el.type === "checkbox") {
+                el.checked = src.type === "checkbox" ? src.checked : false;
+            } else {
+                el.value = src.value || "";
+            }
+        });
+    }
+    function showTodoModal() {
+        if (!todoModal) return;
+        syncTodoModalFromForm();
+        todoModal.hidden = false;
+        const first = todoModal.querySelector("[data-todo-field]");
+        if (first) first.focus();
+    }
+    function hideTodoModal() { if (todoModal) todoModal.hidden = true; }
+    function todoModalVisible() { return todoModal && !todoModal.hidden; }
+
+    async function applyTodoModal() {
+        const url = saveUrl();
+        if (!url) { hideTodoModal(); return; }
+        const body = new URLSearchParams();
+        todoModal.querySelectorAll("[data-todo-field]").forEach(el => {
+            const name = el.dataset.todoField;
+            if (el.type === "checkbox") body.append(name, el.checked ? "true" : "false");
+            else body.append(name, el.value);
+        });
+        const res = await fetch(url, {
+            method: "PATCH",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "text/html",
+                "If-Match": currentVersion(),
+            },
+            body,
+        });
+        if (!res.ok) { hideTodoModal(); return; }
+        const html = (await res.text()).trim();
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        const replacement = template.content.firstElementChild;
+        const existing = currentForm();
+        if (replacement && existing) existing.replaceWith(replacement);
+        hideTodoModal();
+    }
+
+    if (todoModal) {
+        todoModal.addEventListener("click", (ev) => { if (ev.target === todoModal) hideTodoModal(); });
+        const cancelBtn = todoModal.querySelector("[data-todo-modal-cancel]");
+        const applyBtn = todoModal.querySelector("[data-todo-modal-apply]");
+        if (cancelBtn) cancelBtn.addEventListener("click", hideTodoModal);
+        if (applyBtn) applyBtn.addEventListener("click", applyTodoModal);
+    }
+
     if (help) {
         help.addEventListener("click", (ev) => {
             if (ev.target === help) hideHelp();
@@ -530,6 +649,11 @@
         if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
 
         if (ev.key === "Escape") {
+            if (todoModalVisible()) {
+                ev.preventDefault();
+                hideTodoModal();
+                return;
+            }
             if (helpVisible()) {
                 ev.preventDefault();
                 hideHelp();
@@ -544,6 +668,7 @@
 
         if (isTypingTarget(document.activeElement)) return;
         if (helpVisible()) return;
+        if (todoModalVisible()) return;
 
         switch (ev.key) {
             case "j":
@@ -587,6 +712,10 @@
             case "f":
                 ev.preventDefault();
                 toggleCheckbox("needs_flip");
+                break;
+            case "t":
+                ev.preventDefault();
+                showTodoModal();
                 break;
             case "?":
                 ev.preventDefault();
