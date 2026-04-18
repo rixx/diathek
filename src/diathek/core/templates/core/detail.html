@@ -8,6 +8,8 @@
 .detail-header { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; }
 .detail-header h1 { margin: 0; font-size: 1.1rem; }
 .detail-header nav { display: flex; gap: 0.5rem; }
+.detail-status { display: flex; gap: 0.75rem; align-items: baseline; font-size: 0.85rem; color: #555; }
+.detail-status-users { font-style: italic; }
 .detail-main { position: relative; }
 .detail-image { max-width: 100%; max-height: calc(100vh - 160px); display: block; margin: 0 auto; background: #000; }
 .detail-nav { display: flex; justify-content: space-between; margin-top: 0.5rem; }
@@ -126,12 +128,21 @@
 {% block content %}
 <div class="detail-layout"
      data-detail-root
+     data-box-uuid="{{ box.uuid }}"
+     data-current-image-id="{{ image.pk }}"
+     data-state-url="{% url 'state' %}"
+     data-fragment-url="{% url 'image_fragment' image.pk %}"
      {% if prev_id %}data-prev-image-url="{% url 'image_detail' box.uuid prev_id %}"{% endif %}
      {% if next_id %}data-next-image-url="{% url 'image_detail' box.uuid next_id %}"{% endif %}
      {% if prev_box_image %}data-prev-box-url="{% url 'image_detail' prev_box_image.box.uuid prev_box_image.pk %}"{% endif %}
      {% if next_box_image %}data-next-box-url="{% url 'image_detail' next_box_image.box.uuid next_box_image.pk %}"{% endif %}>
     <header class="detail-header">
         <h1><a href="{% url 'index' %}">{{ box.name }}</a> · Bild {{ position }} von {{ total }}</h1>
+        <div class="detail-status">
+            <span class="detail-status-progress" data-progress-indicator></span>
+            <span class="detail-status-driver" data-driver-indicator>niemand steuert</span>
+            <span class="detail-status-users" data-active-users></span>
+        </div>
         <nav>
             <a href="{% if prev_id %}{% url 'image_detail' box.uuid prev_id %}{% else %}#{% endif %}"
                {% if not prev_id %}aria-disabled="true"{% endif %}>&larr;</a>
@@ -179,6 +190,109 @@
 {% endblock %}
 
 {% block extra_body %}
+<script>
+(function () {
+    const root = document.querySelector("[data-detail-root]");
+    if (!root) return;
+    const stateUrl = root.dataset.stateUrl;
+    const boxUuid = root.dataset.boxUuid;
+    const fragmentUrl = root.dataset.fragmentUrl;
+    const currentImageId = String(root.dataset.currentImageId || "");
+    if (!stateUrl || !boxUuid || !currentImageId) return;
+
+    const driverEl = document.querySelector("[data-driver-indicator]");
+    const progressEl = document.querySelector("[data-progress-indicator]");
+    const usersEl = document.querySelector("[data-active-users]");
+    const POLL_INTERVAL_MS = 1000;
+    let pollTimer = null;
+    let inFlight = false;
+
+    function isTypingTarget(el) {
+        if (!el) return false;
+        const tag = el.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    }
+
+    function renderDriver(driver) {
+        if (!driverEl) return;
+        if (!driver) {
+            driverEl.textContent = "niemand steuert";
+            driverEl.dataset.driverUser = "";
+            return;
+        }
+        driverEl.textContent = `${driver.user} steuert`;
+        driverEl.dataset.driverUser = driver.user;
+    }
+
+    function renderProgress(progress) {
+        if (!progressEl) return;
+        if (!progress) { progressEl.textContent = ""; return; }
+        progressEl.textContent = `${progress.tagged}/${progress.total} getaggt, ${progress.open_todos} offen`;
+    }
+
+    function renderActiveUsers(users) {
+        if (!usersEl) return;
+        usersEl.textContent = users && users.length ? `anwesend: ${users.join(", ")}` : "";
+    }
+
+    async function swapCurrentImageIfStale(versions) {
+        if (!fragmentUrl) return;
+        const form = document.querySelector(`form[data-image-id="${currentImageId}"]`);
+        if (!form) return;
+        const remote = versions[currentImageId];
+        if (remote === undefined) return;
+        const local = parseInt(form.dataset.version, 10);
+        if (!Number.isFinite(local) || remote <= local) return;
+        if (form.contains(document.activeElement) && isTypingTarget(document.activeElement)) return;
+
+        const res = await fetch(fragmentUrl, {headers: {"Accept": "text/html"}});
+        if (!res.ok) return;
+        const html = (await res.text()).trim();
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        const replacement = template.content.firstElementChild;
+        if (replacement) form.replaceWith(replacement);
+    }
+
+    async function poll() {
+        if (inFlight || document.hidden) return;
+        inFlight = true;
+        try {
+            const res = await fetch(`${stateUrl}?box=${encodeURIComponent(boxUuid)}`, {
+                headers: {"Accept": "application/json"}
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            renderDriver(data.driver);
+            renderProgress(data.progress);
+            renderActiveUsers(data.active_users);
+            await swapCurrentImageIfStale(data.versions || {});
+        } catch (err) {
+            if (err.name !== "AbortError") throw err;
+        } finally {
+            inFlight = false;
+        }
+    }
+
+    function start() {
+        if (pollTimer !== null) return;
+        pollTimer = setInterval(poll, POLL_INTERVAL_MS);
+    }
+    function stop() {
+        if (pollTimer === null) return;
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { stop(); return; }
+        start();
+        poll();
+    });
+
+    if (!document.hidden) { start(); poll(); }
+})();
+</script>
 <script>
 (function () {
     const img = document.querySelector(".detail-image[data-full]");

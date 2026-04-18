@@ -1,5 +1,7 @@
+from datetime import timedelta
+
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db import transaction
@@ -12,10 +14,12 @@ from PIL import UnidentifiedImageError
 
 from diathek.core.forms import ImportForm, RegistrationForm
 from diathek.core.metadata import MetadataError, parse_metadata_payload
-from diathek.core.models import Box, Image, InviteCode, Place
+from diathek.core.models import Box, DriverState, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
 from diathek.metadata.description import stamp_description
+
+POLL_THROTTLE_SECONDS = 30
 
 
 def register(request, code):
@@ -482,6 +486,76 @@ def date_autocomplete(request):
     suggestions = dateparse.word_suggestions(text.strip())
     return JsonResponse(
         {"parsed": parsed_payload, "error": error, "suggestions": suggestions}
+    )
+
+
+def _bump_last_poll(user, now):
+    throttle_cutoff = now - timedelta(seconds=POLL_THROTTLE_SECONDS)
+    if user.last_poll is not None and user.last_poll >= throttle_cutoff:
+        return
+    get_user_model().objects.filter(pk=user.pk).update(last_poll=now)
+    user.last_poll = now
+
+
+def _driver_payload(driver_state):
+    active = driver_state.active_driver
+    if active is None:
+        return None
+    current_box = driver_state.current_box
+    return {
+        "user": active.name or active.username,
+        "box_uuid": str(current_box.uuid) if current_box is not None else None,
+        "image_id": driver_state.current_image_id,
+    }
+
+
+def _progress_payload(box):
+    data = box.progress
+    total = data["total"]
+    done = data["done"]
+    return {"total": total, "tagged": data["tagged"], "open_todos": total - done}
+
+
+@login_required
+def state(request):
+    now = timezone.now()
+    _bump_last_poll(request.user, now)
+
+    box = None
+    box_uuid = request.GET.get("box", "").strip()
+    if box_uuid:
+        box = Box.objects.filter(uuid=box_uuid).first()
+
+    driver_state = DriverState.objects.select_related(
+        "driver", "current_box", "current_image"
+    ).get(pk=1)
+
+    versions = {}
+    progress_data = None
+    if box is not None:
+        versions = {
+            str(pk): version
+            for pk, version in Image.objects.filter(box=box).values_list(
+                "pk", "version"
+            )
+        }
+        progress_data = _progress_payload(box)
+
+    presence_cutoff = DriverState.presence_cutoff()
+    active_users = list(
+        get_user_model()
+        .objects.filter(last_poll__gte=presence_cutoff)
+        .order_by("name", "username")
+        .values_list("name", flat=True)
+    )
+
+    return JsonResponse(
+        {
+            "driver": _driver_payload(driver_state),
+            "versions": versions,
+            "progress": progress_data,
+            "active_users": active_users,
+        }
     )
 
 
