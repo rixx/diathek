@@ -5,7 +5,7 @@ Kept separate from views so the parsing/validation can be tested in isolation.
 
 import datetime
 
-from diathek.core.models import DatePrecision, Place
+from diathek.core.models import DatePrecision
 
 
 class MetadataError(ValueError):
@@ -46,20 +46,6 @@ def _parse_date(value):
         raise MetadataError(f"Ungültiges Datum: {value!r}") from err
 
 
-def _parse_place(value):
-    raw = value.strip()
-    if raw == "":
-        return None
-    try:
-        pk = int(raw)
-    except ValueError as err:
-        raise MetadataError("Ungültiger Ort.") from err
-    try:
-        return Place.objects.get(pk=pk)
-    except Place.DoesNotExist as err:
-        raise MetadataError("Unbekannter Ort.") from err
-
-
 _VALID_PRECISIONS = {choice for choice, _ in DatePrecision.choices} | {""}
 
 
@@ -78,14 +64,11 @@ def parse_metadata_payload(data):
 
     Raises `MetadataError` on the first invalid field.
 
-    `place` is returned as `place_id` so the result can be passed straight into
-    `QuerySet.update()`.
+    The `place` field is NOT handled here — place resolution requires creating
+    rows with the acting user attributed to the audit log, which only the view
+    can do cleanly. Callers must handle `data["place"]` separately.
     """
     updates = {}
-
-    if "place" in data:
-        place = _parse_place(data["place"])
-        updates["place_id"] = place.pk if place else None
 
     for field in BOOL_FIELDS:
         if field in data:

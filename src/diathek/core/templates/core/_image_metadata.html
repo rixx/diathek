@@ -17,23 +17,40 @@
     </p>
     {% endif %}
 
-    <label class="field">
+    <div class="field place-field" data-place-field>
         <span>Ort</span>
-        <select name="place"
-                hx-patch="{% url 'image_save' image.pk %}"
-                hx-headers='{"If-Match": "{{ image.version }}"}'
-                hx-target="#image-form-{{ image.pk }}"
-                hx-swap="outerHTML"
-                hx-trigger="change"
-                hx-include="this">
-            <option value="">—</option>
-            {% for place in places %}
-            <option value="{{ place.pk }}"{% if image.place_id == place.pk %} selected{% endif %}>
-                {{ place.name }}{% if not place.has_coords %} ⚠{% endif %}
-            </option>
+        {% if recent_places %}
+        <div class="place-pills" data-place-pills>
+            {% for p in recent_places %}
+            <button type="button"
+                    class="place-pill{% if not p.has_coords %} place-pill--no-coords{% endif %}"
+                    data-place-name="{{ p.name }}">
+                {{ p.name }}{% if not p.has_coords %} ⚠{% endif %}
+            </button>
             {% endfor %}
-        </select>
-    </label>
+        </div>
+        {% endif %}
+        <div class="place-combobox">
+            <input type="text"
+                   name="place"
+                   value="{% if image.place %}{{ image.place.name }}{% endif %}"
+                   autocomplete="off"
+                   placeholder="Ort eingeben oder suchen"
+                   hx-patch="{% url 'image_save' image.pk %}"
+                   hx-headers='{"If-Match": "{{ image.version }}"}'
+                   hx-target="#image-form-{{ image.pk }}"
+                   hx-swap="outerHTML"
+                   hx-trigger="change"
+                   hx-preserve="true"
+                   data-place-input
+                   data-field="place"
+                   data-autocomplete-url="{% url 'place_autocomplete' %}">
+            <ul class="place-suggestions" data-place-suggestions hidden></ul>
+        </div>
+        {% if image.place and not image.place.has_coords %}
+        <p class="place-warning">⚠ Ort hat keine Koordinaten.</p>
+        {% endif %}
+    </div>
 
     <label class="field checkbox">
         <input type="checkbox"

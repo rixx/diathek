@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 from freezegun import freeze_time
 
-from diathek.core.models import AuditLog
+from diathek.core.models import AuditLog, Place
 from tests.factories import BoxFactory, ImageFactory, PlaceFactory, UserFactory
 
 pytestmark = pytest.mark.integration
@@ -114,7 +114,7 @@ def test_save_updates_simple_field_and_bumps_version(auth_client, image):
     place = PlaceFactory(name="Garten")
     old_version = image.version
 
-    response = _patch(auth_client, image, {"place": str(place.pk)})
+    response = _patch(auth_client, image, {"place": place.name})
 
     assert response.status_code == 200
     image.refresh_from_db()
@@ -126,10 +126,9 @@ def test_save_updates_simple_field_and_bumps_version(auth_client, image):
 def test_save_writes_audit_log_with_diff(auth_client, image):
     place = PlaceFactory(name="Garten")
 
-    _patch(auth_client, image, {"place": str(place.pk)})
+    _patch(auth_client, image, {"place": place.name})
 
-    entry = AuditLog.objects.latest("timestamp")
-    assert entry.action_type == "image.change"
+    entry = AuditLog.objects.filter(action_type="image.change").latest("timestamp")
     assert entry.user == auth_client.user
     assert entry.box == image.box
     assert entry.data["before"] == {"place": None}
@@ -276,6 +275,82 @@ def test_save_accepts_post_for_clients_without_patch(auth_client, image):
     assert response.status_code == 200
     image.refresh_from_db()
     assert image.place_todo is True
+
+
+@pytest.mark.django_db
+def test_save_creates_new_place_when_name_is_unknown(auth_client, image):
+    response = _patch(auth_client, image, {"place": "Neuer Ort"})
+
+    assert response.status_code == 200
+    image.refresh_from_db()
+    assert image.place is not None
+    assert image.place.name == "Neuer Ort"
+    assert image.place.latitude is None
+    assert image.place.longitude is None
+    assert AuditLog.objects.filter(
+        action_type="place.create", user=auth_client.user
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_save_matches_existing_place_case_insensitively(auth_client, image):
+    place = PlaceFactory(name="Garten")
+
+    response = _patch(auth_client, image, {"place": "garten"})
+
+    assert response.status_code == 200
+    image.refresh_from_db()
+    assert image.place == place
+    assert Place.objects.filter(name__iexact="garten").count() == 1
+
+
+@pytest.mark.django_db
+def test_save_empty_place_clears_foreign_key(auth_client, image):
+    place = PlaceFactory(name="Garten")
+    image.place = place
+    image.save(user=auth_client.user)
+
+    response = _patch(auth_client, image, {"place": ""})
+
+    assert response.status_code == 200
+    image.refresh_from_db()
+    assert image.place is None
+
+
+@pytest.mark.django_db
+def test_save_whitespace_place_is_treated_as_empty(auth_client, image):
+    response = _patch(auth_client, image, {"place": "   "})
+
+    assert response.status_code == 200
+    image.refresh_from_db()
+    assert image.place is None
+    assert Place.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_image_detail_renders_recent_place_pills(auth_client, image):
+    recent = PlaceFactory(name="Küche")
+    ImageFactory(place=recent)
+
+    response = auth_client.get(reverse("image_detail", args=[image.box.uuid, image.pk]))
+
+    assert response.status_code == 200
+    assert recent in response.context["recent_places"]
+    content = response.content.decode()
+    assert "place-pill" in content
+    assert "Küche" in content
+
+
+@pytest.mark.django_db
+def test_image_detail_pill_warns_for_place_without_coords(auth_client, image):
+    no_coords = PlaceFactory(name="Ohne Koordinaten")
+    ImageFactory(place=no_coords)
+
+    response = auth_client.get(reverse("image_detail", args=[image.box.uuid, image.pk]))
+
+    content = response.content.decode()
+    assert "place-pill--no-coords" in content
+    assert "Ohne Koordinaten ⚠" in content
 
 
 @pytest.mark.django_db

@@ -17,4 +17,7 @@ urlpatterns = [
         views.image_fragment,
         name="image_fragment",
     ),
+    path(
+        "api/autocomplete/place/", views.place_autocomplete, name="place_autocomplete"
+    ),
 ]

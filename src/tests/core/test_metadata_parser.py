@@ -4,7 +4,6 @@ import pytest
 from django.http import QueryDict
 
 from diathek.core.metadata import MetadataError, parse_metadata_payload
-from tests.factories import PlaceFactory
 
 pytestmark = pytest.mark.unit
 
@@ -20,26 +19,10 @@ def test_absent_fields_are_omitted_from_updates():
     assert parse_metadata_payload(_qd()) == {}
 
 
-@pytest.mark.django_db
-def test_place_pk_resolves_to_place_id_update():
-    place = PlaceFactory()
-
-    assert parse_metadata_payload(_qd(place=str(place.pk))) == {"place_id": place.pk}
-
-
-def test_empty_place_string_clears_the_foreign_key():
-    assert parse_metadata_payload(_qd(place="")) == {"place_id": None}
-
-
-def test_place_non_numeric_raises():
-    with pytest.raises(MetadataError):
-        parse_metadata_payload(_qd(place="abc"))
-
-
-@pytest.mark.django_db
-def test_place_missing_pk_raises():
-    with pytest.raises(MetadataError):
-        parse_metadata_payload(_qd(place="999999"))
+def test_place_is_not_handled_by_payload_parser():
+    # Place resolution requires the acting user for audit attribution and must
+    # happen inside the view's transaction — the parser deliberately ignores it.
+    assert parse_metadata_payload(_qd(place="Garten")) == {}
 
 
 @pytest.mark.parametrize(

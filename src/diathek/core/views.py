@@ -264,7 +264,7 @@ def _metadata_context(image, request, *, conflict=False, error=None):
     return {
         "image": image,
         "box": image.box,
-        "places": Place.objects.order_by("name"),
+        "recent_places": list(Place.objects.recent()),
         "position": position,
         "total": total,
         "prev_id": prev_id,
@@ -274,6 +274,18 @@ def _metadata_context(image, request, *, conflict=False, error=None):
         "precisions": Image._meta.get_field("date_precision").choices,
         "request": request,
     }
+
+
+def _resolve_place(value, *, user):
+    raw = value.strip()
+    if raw == "":
+        return None
+    existing = Place.objects.filter(name__iexact=raw).first()
+    if existing is not None:
+        return existing
+    place = Place(name=raw)
+    place.save(user=user)
+    return place
 
 
 def _render_fragment(request, image, *, status=200, conflict=False, error=None):
@@ -336,6 +348,10 @@ def image_save(request, image_id):
         if locked.box and locked.box.archived:
             return HttpResponseForbidden("Box ist archiviert.")
 
+        if "place" in data:
+            place = _resolve_place(data["place"], user=request.user)
+            updates["place_id"] = place.pk if place else None
+
         if "description" in updates:
             updates["description"] = stamp_description(
                 old=locked.description,
@@ -383,3 +399,26 @@ def _diff_updates(image, updates):
 def image_fragment(request, image_id):
     image = get_object_or_404(Image.objects.select_related("box", "place"), pk=image_id)
     return _render_fragment(request, image)
+
+
+@login_required
+def place_autocomplete(request):
+    q = request.GET.get("q", "").strip()
+    qs = Place.objects.all()
+    if q:
+        qs = qs.filter(name__icontains=q)
+    matches = sorted(
+        qs[:100],
+        key=lambda p: (
+            0 if p.name.lower().startswith(q.lower()) else 1,
+            p.name.lower(),
+        ),
+    )[:20]
+    return JsonResponse(
+        {
+            "results": [
+                {"id": p.pk, "name": p.name, "has_coords": p.has_coords}
+                for p in matches
+            ]
+        }
+    )
