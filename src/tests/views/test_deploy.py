@@ -121,3 +121,38 @@ def test_deploy_button_hidden_when_not_configured(superuser_client, settings):
     response = superuser_client.get(reverse("index"))
 
     assert b"btn-deploy" not in response.content
+
+
+@pytest.mark.django_db
+def test_deploy_htmx_request_returns_deploying_fragment(
+    superuser_client, tmp_path, settings
+):
+    flag = tmp_path / "deploy.flag"
+    settings.DEPLOY_FLAG_FILE = str(flag)
+
+    response = superuser_client.post(reverse("deploy"), HTTP_HX_REQUEST="true")
+
+    assert response.status_code == 200
+    assert b"site-nav-deploying" in response.content
+    assert reverse("healthz").encode() in response.content
+    assert flag.exists()
+
+
+@pytest.mark.django_db
+def test_deploy_htmx_without_configured_flag_redirects_via_header(
+    superuser_client, settings
+):
+    settings.DEPLOY_FLAG_FILE = ""
+
+    response = superuser_client.post(reverse("deploy"), HTTP_HX_REQUEST="true")
+
+    assert response.status_code == 204
+    assert response["HX-Redirect"] == reverse("index")
+
+
+@pytest.mark.django_db
+def test_healthz_is_public_and_returns_ok(client):
+    response = client.get(reverse("healthz"))
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

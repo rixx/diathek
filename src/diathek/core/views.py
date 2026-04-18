@@ -988,9 +988,7 @@ def trigger_deploy(request):
             request, "Deploy ist nicht konfiguriert (DEPLOY_FLAG_FILE fehlt)."
         )
         if request.headers.get("HX-Request"):
-            return HttpResponse(
-                status=204, headers={"HX-Redirect": reverse("index")}
-            )
+            return HttpResponse(status=204, headers={"HX-Redirect": reverse("index")})
         return redirect("index")
 
     target = Path(flag_path)
