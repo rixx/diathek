@@ -31,10 +31,11 @@
 .grid-tile {
     position: relative;
     display: block;
+    aspect-ratio: 3 / 2;
     text-decoration: none;
     color: inherit;
     border: 2px solid transparent;
-    background: #fff;
+    background: #000;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
     border-radius: 4px;
     overflow: hidden;
@@ -46,7 +47,13 @@
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 .grid-tile.archived { pointer-events: none; opacity: 0.7; }
-.grid-tile img { width: 100%; display: block; background: #000; }
+.grid-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #000;
+}
 .grid-tile .sequence {
     position: absolute;
     top: 2px;
@@ -279,7 +286,7 @@
             <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy"
                  class="{% if image.needs_flip %}image-flipped{% endif %}">
             {% else %}
-            <div style="aspect-ratio: 3/2; display: flex; align-items: center; justify-content: center; background: #222; color: #aaa; font-size: 0.75rem;">{{ image.filename }}</div>
+            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #222; color: #aaa; font-size: 0.75rem;">{{ image.filename }}</div>
             {% endif %}
             <span class="sequence">{{ image.sequence_in_box }}</span>
             <span class="todos">
