@@ -100,9 +100,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 MEDIA_URL = "media/"
 STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
-    }
+    },
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -3,7 +3,16 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.forms import UserCreationForm
 from django.utils.html import format_html
 
-from diathek.core.models import InviteCode, User
+from diathek.core.models import (
+    AuditLog,
+    Box,
+    Collection,
+    DriverState,
+    Image,
+    InviteCode,
+    Place,
+    User,
+)
 
 
 class DiathekUserCreationForm(UserCreationForm):
@@ -74,3 +83,70 @@ class InviteCodeAdmin(admin.ModelAdmin):
         if not change and obj.created_by_id is None:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+@admin.register(Box)
+class BoxAdmin(admin.ModelAdmin):
+    list_display = ("name", "sort_order", "archived", "archived_at", "created_at")
+    list_filter = ("archived",)
+    search_fields = ("name", "description")
+    readonly_fields = ("uuid", "created_at", "updated_at", "archived_at")
+
+
+@admin.register(Image)
+class ImageAdmin(admin.ModelAdmin):
+    list_display = (
+        "filename",
+        "box",
+        "sequence_in_box",
+        "place",
+        "date_display",
+        "version",
+    )
+    list_filter = ("box", "place_todo", "date_todo", "needs_flip")
+    search_fields = ("filename", "description", "date_display")
+    readonly_fields = (
+        "uuid",
+        "content_hash",
+        "file_size",
+        "width",
+        "height",
+        "version",
+        "created_at",
+        "updated_at",
+    )
+
+
+@admin.register(Place)
+class PlaceAdmin(admin.ModelAdmin):
+    list_display = ("name", "latitude", "longitude")
+    search_fields = ("name",)
+
+
+@admin.register(Collection)
+class CollectionAdmin(admin.ModelAdmin):
+    list_display = ("title", "immich_url", "created_at")
+    search_fields = ("title", "description")
+    filter_horizontal = ("boxes",)
+
+
+@admin.register(DriverState)
+class DriverStateAdmin(admin.ModelAdmin):
+    list_display = ("driver", "current_box", "current_image", "updated_at")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ("timestamp", "action_type", "user", "box", "content_type")
+    list_filter = ("action_type", "content_type")
+    search_fields = ("action_type",)
+    readonly_fields = (
+        "content_type",
+        "object_id",
+        "box",
+        "action_type",
+        "user",
+        "timestamp",
+        "data",
+    )
