@@ -47,7 +47,12 @@ class Box(BaseModel):
             place__isnull=True, date_earliest__isnull=True, date_latest__isnull=True
         ).count()
         done = qs.filter(
-            place_todo=False, date_todo=False, needs_flip=False, edit_todo=""
+            place_todo=False,
+            date_todo=False,
+            needs_flip=False,
+            edit_todo="",
+            place__isnull=False,
+            date_earliest__isnull=False,
         ).count()
         return {
             "total": total,
