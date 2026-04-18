@@ -30,7 +30,17 @@
 .driver-toast[hidden] { display: none; }
 .driver-toast button { font-size: 0.85rem; padding: 0.15rem 0.5rem; cursor: pointer; }
 .detail-main { position: relative; }
-.detail-image { max-width: 100%; max-height: calc(100vh - 160px); display: block; margin: 0 auto; background: #000; }
+.detail-image {
+    max-width: 100%;
+    max-height: calc(100vh - 160px);
+    display: block;
+    margin: 0 auto;
+    background: #000;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-image-lg);
+    transition: transform 0.2s ease;
+}
+.detail-image.image-flipped { transform: scaleX(-1); }
 .detail-nav { display: flex; justify-content: space-between; margin-top: 0.5rem; }
 .detail-nav a { font-size: 1.25rem; padding: 0.5rem 0.75rem; text-decoration: none; border: 1px solid #ccc; }
 .detail-nav a[aria-disabled="true"] { opacity: 0.3; pointer-events: none; }
@@ -197,7 +207,7 @@
             <span class="detail-status-users" data-active-users></span>
         </div>
         <nav>
-            <a href="{% url 'box_grid' box.uuid %}" data-grid-link>Raster</a>
+            <a href="{% url 'box_grid' box.uuid %}" data-grid-link>Galerie</a>
             <a href="{% if prev_id %}{% url 'image_detail' box.uuid prev_id %}{% else %}#{% endif %}"
                {% if not prev_id %}aria-disabled="true"{% endif %}>&larr;</a>
             <a href="{% if next_id %}{% url 'image_detail' box.uuid next_id %}{% else %}#{% endif %}"
@@ -254,7 +264,7 @@
             <dt>k / ←</dt><dd>Vorheriges Bild</dd>
             <dt>J</dt><dd>Nächste Box</dd>
             <dt>K</dt><dd>Vorherige Box</dd>
-            <dt>g</dt><dd>Rasteransicht</dd>
+            <dt>g</dt><dd>Galerieansicht</dd>
             <dt>p</dt><dd>Ort fokussieren</dd>
             <dt>d</dt><dd>Datum fokussieren</dd>
             <dt>n</dt><dd>Beschreibung fokussieren</dd>
@@ -530,6 +540,29 @@
     const preloader = new Image();
     preloader.addEventListener("load", () => { img.src = full; });
     preloader.src = full;
+})();
+</script>
+<script>
+(function () {
+    const img = document.querySelector(".detail-image");
+    if (!img) return;
+    function currentFlipCheckbox() {
+        return document.querySelector('form.metadata-form input[name="needs_flip"]');
+    }
+    function sync() {
+        const cb = currentFlipCheckbox();
+        img.classList.toggle("image-flipped", !!(cb && cb.checked));
+    }
+    document.addEventListener("change", (ev) => {
+        if (ev.target && ev.target.name === "needs_flip") sync();
+    });
+    // re-sync whenever htmx swaps the metadata form fragment
+    document.body.addEventListener("htmx:afterSwap", sync);
+    // polling code replaces the form directly (not via htmx); cover that too
+    const observer = new MutationObserver(sync);
+    const panel = document.querySelector("[data-detail-root] aside");
+    if (panel) observer.observe(panel, { childList: true, subtree: true });
+    sync();
 })();
 </script>
 <script>

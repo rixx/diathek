@@ -26,17 +26,35 @@
 {% if boxes %}
 <ul class="box-list">
     {% for box in boxes %}
-    <li>
-        {% with first_image=box.images.first progress=box.progress %}
-        {% if first_image %}
-        <a href="{% url 'image_detail' box.uuid first_image.pk %}"><strong>{{ box.name }}</strong></a>
-        · <a href="{% url 'box_grid' box.uuid %}">Raster</a>
-        {% else %}
-        <strong>{{ box.name }}</strong>
+    <li class="box-card">
+        <div class="box-card-head">
+            {% with first_image=box.preview_images.0 progress=box.progress %}
+            {% if first_image %}
+            <a href="{% url 'image_detail' box.uuid first_image.pk %}"><strong>{{ box.name }}</strong></a>
+            · <a href="{% url 'box_grid' box.uuid %}">Galerie</a>
+            {% else %}
+            <strong>{{ box.name }}</strong>
+            {% endif %}
+            <small>{{ progress.total }} Bilder, {{ progress.done }} fertig</small>
+            {% if box.description %}<p>{{ box.description }}</p>{% endif %}
+            {% endwith %}
+        </div>
+        {% if box.preview_images %}
+        <ol class="box-card-thumbs">
+            {% for image in box.preview_images %}
+            <li>
+                <a href="{% url 'image_detail' box.uuid image.pk %}" title="{{ image.filename }}">
+                    {% if image.thumb_small %}
+                    <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy"
+                         class="{% if image.needs_flip %}image-flipped{% endif %}">
+                    {% else %}
+                    <span class="box-card-thumb-placeholder" aria-hidden="true">?</span>
+                    {% endif %}
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
         {% endif %}
-        <small>{{ progress.total }} Bilder, {{ progress.done }} fertig</small>
-        {% if box.description %}<p>{{ box.description }}</p>{% endif %}
-        {% endwith %}
     </li>
     {% endfor %}
 </ul>

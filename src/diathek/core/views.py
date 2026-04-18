@@ -52,9 +52,18 @@ def register(request, code):
     return render(request, "core/register.html", {"form": form, "invite": invite})
 
 
+INDEX_PREVIEW_THUMBS = 12
+
+
 @login_required
 def index(request):
-    active_boxes = Box.objects.filter(archived=False).order_by("sort_order", "name")
+    active_boxes = list(
+        Box.objects.filter(archived=False).order_by("sort_order", "name")
+    )
+    for box in active_boxes:
+        box.preview_images = list(
+            box.images.order_by("sequence_in_box")[:INDEX_PREVIEW_THUMBS]
+        )
     archived_boxes = Box.objects.filter(archived=True).order_by("-archived_at", "name")
     collections = Collection.objects.order_by("-updated_at")[:6]
     unsorted_count = Image.objects.filter(box__isnull=True).count()

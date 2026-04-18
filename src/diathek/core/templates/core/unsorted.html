@@ -43,7 +43,7 @@
         <ul class="box-drop-list" id="boxes">
             {% for box in boxes %}
             <li class="box-drop" data-uuid="{{ box.uuid }}" data-name="{{ box.name }}">
-                {{ box.name }}
+                <a href="{% url 'box_grid' box.uuid %}">{{ box.name }}</a>
             </li>
             {% endfor %}
         </ul>

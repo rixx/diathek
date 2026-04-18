@@ -1,6 +1,6 @@
 {% extends "core/base.html" %}
 
-{% block title %}{{ box.name }} · Raster · diathek{% endblock %}
+{% block title %}{{ box.name }} · Galerie · diathek{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -35,8 +35,16 @@
     color: inherit;
     border: 2px solid transparent;
     background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.grid-tile:hover { border-color: #036; }
+.grid-tile:hover {
+    border-color: #036;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.1);
+}
 .grid-tile.archived { pointer-events: none; opacity: 0.7; }
 .grid-tile img { width: 100%; display: block; background: #000; }
 .grid-tile .sequence {
@@ -178,7 +186,7 @@
      data-date-autocomplete-url="{% url 'date_autocomplete' %}"
      {% endif %}>
     <header class="grid-header">
-        <h1>{{ box.name }} · Raster{% if box.archived %} · <span class="archive-tag">archiviert</span>{% endif %}</h1>
+        <h1>{{ box.name }} · Galerie{% if box.archived %} · <span class="archive-tag">archiviert</span>{% endif %}</h1>
         <nav>
             {% if not box.archived and first_image %}
             <a href="{% url 'image_detail' box.uuid first_image.pk %}">Detailansicht</a>
@@ -268,7 +276,8 @@
            data-image-id="{{ image.pk }}">
         {% endif %}
             {% if image.thumb_small %}
-            <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy">
+            <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy"
+                 class="{% if image.needs_flip %}image-flipped{% endif %}">
             {% else %}
             <div style="aspect-ratio: 3/2; display: flex; align-items: center; justify-content: center; background: #222; color: #aaa; font-size: 0.75rem;">{{ image.filename }}</div>
             {% endif %}

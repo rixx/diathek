@@ -309,7 +309,7 @@ def test_detail_view_exposes_grid_url_for_g_shortcut(auth_client, box):
     expected = reverse("box_grid", args=[box.uuid])
     assert f'data-grid-url="{expected}"' in content
     assert "data-grid-link" in content
-    assert "Rasteransicht" in content  # help overlay entry
+    assert "Galerieansicht" in content  # help overlay entry
 
 
 @pytest.mark.django_db

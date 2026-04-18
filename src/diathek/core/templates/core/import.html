@@ -22,8 +22,8 @@ unsortiert hoch — zuordnen geht auch später.</p>
         {% for error in form.box_choice.errors %}<span class="error">{{ error }}</span>{% endfor %}
     </p>
 
-    <fieldset class="new-box-fields">
-        <legend>Neue Box (nur ausfüllen, wenn oben „Neue Box anlegen“ gewählt)</legend>
+    <fieldset class="new-box-fields" data-new-box-fields hidden>
+        <legend>Neue Box</legend>
         <p>
             <label for="{{ form.new_box_name.id_for_label }}">Name</label>
             {{ form.new_box_name }}
@@ -43,4 +43,20 @@ unsortiert hoch — zuordnen geht auch später.</p>
 
     <button type="submit">Hochladen</button>
 </form>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(function () {
+    const select = document.getElementById("{{ form.box_choice.id_for_label }}");
+    const fields = document.querySelector("[data-new-box-fields]");
+    if (!select || !fields) return;
+    const NEW_VALUE = "{{ form.BOX_NEW|escapejs }}";
+    function sync() {
+        fields.hidden = select.value !== NEW_VALUE;
+    }
+    select.addEventListener("change", sync);
+    sync();
+})();
+</script>
 {% endblock %}
