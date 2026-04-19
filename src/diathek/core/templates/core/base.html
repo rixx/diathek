@@ -20,6 +20,7 @@
         <a href="{% url 'import' %}">Hochladen</a>
         <a href="{% url 'unsorted' %}">Unsortiert</a>
         {% endif %}
+        <a href="{% url 'gallery' %}">Galerie</a>
         <a href="{% url 'place_list' %}">Orte</a>
         <a href="{% url 'collection_list' %}">Sammlungen</a>
         {% if user.is_superuser and deploy_enabled %}
