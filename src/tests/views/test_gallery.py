@@ -393,9 +393,7 @@ def test_gallery_place_filter_matches_specific_place(auth_client):
     box = BoxFactory()
     garden = PlaceFactory(name="Garten")
     kitchen = PlaceFactory(name="Küche")
-    in_garden = ImageFactory(
-        box=box, sequence_in_box=1, filename="a.jpg", place=garden
-    )
+    in_garden = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=garden)
     ImageFactory(box=box, sequence_in_box=2, filename="b.jpg", place=kitchen)
     ImageFactory(box=box, sequence_in_box=3, filename="c.jpg")
 
@@ -450,11 +448,7 @@ def test_gallery_place_filter_combines_with_other_filters_and_sort(auth_client):
     box = BoxFactory()
     garden = PlaceFactory(name="Garten")
     flagged_in_garden = ImageFactory(
-        box=box,
-        sequence_in_box=1,
-        filename="a.jpg",
-        place=garden,
-        place_todo=True,
+        box=box, sequence_in_box=1, filename="a.jpg", place=garden, place_todo=True
     )
     ImageFactory(
         box=box, sequence_in_box=2, filename="b.jpg", place=garden, place_todo=False

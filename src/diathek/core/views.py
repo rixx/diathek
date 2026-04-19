@@ -474,8 +474,7 @@ def _apply_grid_filter(qs, key):
         return qs.filter(Q(place_todo=True) | Q(place__isnull=True))
     if key == "date-todo":
         return qs.filter(
-            Q(date_todo=True)
-            | Q(date_earliest__isnull=True, date_latest__isnull=True)
+            Q(date_todo=True) | Q(date_earliest__isnull=True, date_latest__isnull=True)
         )
     if key == "flip-todo":
         return qs.filter(needs_flip=True)
@@ -486,7 +485,9 @@ def _apply_grid_filter(qs, key):
     if key == "any-todo":
         return qs.filter(
             Q(place_todo=True)
+            | Q(place__isnull=True)
             | Q(date_todo=True)
+            | Q(date_earliest__isnull=True, date_latest__isnull=True)
             | Q(needs_flip=True)
             | ~Q(edit_todo="")
         )

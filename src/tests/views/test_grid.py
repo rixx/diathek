@@ -180,18 +180,34 @@ def test_grid_filter_has_description(auth_client, box):
 
 @pytest.mark.django_db
 def test_grid_filter_any_todo_combines_all_todo_flags(auth_client, box):
-    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+    place = PlaceFactory()
+    dated_kwargs = {
+        "place": place,
+        "date_earliest": datetime.date(1980, 1, 1),
+        "date_latest": datetime.date(1980, 1, 1),
+    }
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", **dated_kwargs)
     place_todo = ImageFactory(
-        box=box, sequence_in_box=2, filename="b.jpg", place_todo=True
+        box=box, sequence_in_box=2, filename="b.jpg", **dated_kwargs, place_todo=True
     )
     date_todo = ImageFactory(
-        box=box, sequence_in_box=3, filename="c.jpg", date_todo=True
+        box=box, sequence_in_box=3, filename="c.jpg", **dated_kwargs, date_todo=True
     )
     flip_todo = ImageFactory(
-        box=box, sequence_in_box=4, filename="d.jpg", needs_flip=True
+        box=box, sequence_in_box=4, filename="d.jpg", **dated_kwargs, needs_flip=True
     )
     edit_todo = ImageFactory(
-        box=box, sequence_in_box=5, filename="e.jpg", edit_todo="tbd"
+        box=box, sequence_in_box=5, filename="e.jpg", **dated_kwargs, edit_todo="tbd"
+    )
+    missing_place = ImageFactory(
+        box=box,
+        sequence_in_box=6,
+        filename="f.jpg",
+        date_earliest=datetime.date(1980, 1, 1),
+        date_latest=datetime.date(1980, 1, 1),
+    )
+    missing_date = ImageFactory(
+        box=box, sequence_in_box=7, filename="g.jpg", place=place
     )
 
     response = auth_client.get(
@@ -199,7 +215,14 @@ def test_grid_filter_any_todo_combines_all_todo_flags(auth_client, box):
     )
 
     ids = {img.pk for img in response.context["images"]}
-    assert ids == {place_todo.pk, date_todo.pk, flip_todo.pk, edit_todo.pk}
+    assert ids == {
+        place_todo.pk,
+        date_todo.pk,
+        flip_todo.pk,
+        edit_todo.pk,
+        missing_place.pk,
+        missing_date.pk,
+    }
 
 
 @pytest.mark.django_db
