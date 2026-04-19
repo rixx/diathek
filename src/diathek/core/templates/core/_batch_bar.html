@@ -1,0 +1,36 @@
+{% comment %}
+Shared batch-select UI. The enclosing element must carry:
+    data-batch-root           marker the shared JS binds to
+    data-batch-url            POST endpoint (image_batch)
+and render {% csrf_token %} so the JS can read it.
+{% endcomment %}
+<div class="batch-bar" data-batch-bar hidden role="region" aria-label="Mehrfachauswahl">
+    <span class="batch-count" data-batch-count>0 ausgewählt</span>
+    <button type="button" data-batch-action="select-all">Alle (a)</button>
+    <button type="button" data-batch-action="invert">Umkehren</button>
+    <button type="button" data-batch-action="clear">Leeren</button>
+    <span class="batch-spacer"></span>
+    <button type="button" data-batch-prompt="place">Ort setzen</button>
+    <button type="button" data-batch-prompt="date">Datum setzen</button>
+    <button type="button" data-batch-prompt="todos">Todos (t)</button>
+    <button type="button" data-batch-prompt="clear-todos">Todos leeren</button>
+    <button type="button" data-batch-action="exit">Beenden (Esc)</button>
+    <span class="batch-error" data-batch-error role="alert"></span>
+</div>
+
+<div class="todo-modal" data-batch-todo-modal hidden role="dialog" aria-modal="true" aria-labelledby="batch-todo-modal-title">
+    <div class="todo-modal-panel">
+        <h2 id="batch-todo-modal-title">Todos für Auswahl</h2>
+        <label><input type="checkbox" data-todo-field="place_todo"> Ort unklar</label>
+        <label><input type="checkbox" data-todo-field="date_todo"> Datum unklar</label>
+        <label><input type="checkbox" data-todo-field="needs_flip"> Spiegeln</label>
+        <label>
+            <span>Lightroom-Notiz</span>
+            <input type="text" data-todo-field="edit_todo" placeholder="leer = unverändert">
+        </label>
+        <div class="todo-modal-actions">
+            <button type="button" data-todo-modal-cancel>Abbrechen</button>
+            <button type="button" data-todo-modal-apply>Anwenden</button>
+        </div>
+    </div>
+</div>

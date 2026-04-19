@@ -755,3 +755,65 @@ h1, h2, h3 {
 .todo-icon.date-todo { background: #a03080; }
 .todo-icon.flip-todo { background: #0a6; }
 .todo-icon.edit-todo { background: #888; }
+
+/* Batch-select UI — shared between grid and gallery views. */
+[data-batch-root][data-select-mode] .image-tile { cursor: pointer; }
+.image-tile.selected {
+    border-color: #036;
+    box-shadow: 0 0 0 2px #036 inset;
+}
+
+.batch-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #036;
+    color: #fff;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+.batch-bar[hidden] { display: none; }
+.batch-bar .batch-count { font-weight: 600; }
+.batch-bar .batch-spacer { flex: 1; }
+.batch-bar button, .batch-bar .batch-btn {
+    background: #fff;
+    color: #036;
+    border: none;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 0.2rem;
+}
+.batch-bar button:hover, .batch-bar .batch-btn:hover { background: #ddeeff; }
+.batch-bar button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.batch-bar .batch-error { color: #fdd; font-size: 0.85rem; }
+
+.todo-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+.todo-modal[hidden] { display: none; }
+.todo-modal-panel {
+    background: #fff;
+    color: #222;
+    padding: 1.5rem;
+    max-width: 24rem;
+    width: 100%;
+    border-radius: 0.25rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    display: grid;
+    gap: 0.75rem;
+}
+.todo-modal-panel h2 { margin: 0; font-size: 1rem; }
+.todo-modal-panel label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.95rem; }
+.todo-modal-panel input[type=text] { width: 100%; box-sizing: border-box; padding: 0.25rem; }
+.todo-modal-panel .todo-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }

@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load static %}
 
 {% block title %}Galerie · diathek{% endblock %}
 
@@ -52,10 +53,15 @@
 {% endblock %}
 
 {% block content %}
-<div class="gallery-layout">
+<div class="gallery-layout"
+     data-batch-root
+     data-batch-url="{% url 'image_batch' %}">
     <header class="gallery-header">
         <h1>Galerie · alle aktiven Boxen</h1>
     </header>
+
+    {% csrf_token %}
+    {% include "core/_batch_bar.html" %}
 
     <nav class="gallery-controls" aria-label="Filter und Sortierung">
         <div class="gallery-control-group" role="tablist" aria-label="Filter">
@@ -103,4 +109,8 @@
     <p class="gallery-empty">Keine Bilder passen zu diesem Filter.</p>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'core/batch_select.js' %}" defer></script>
 {% endblock %}

@@ -24,7 +24,7 @@ urlpatterns = [
     ),
     path("deploy/", views.trigger_deploy, name="deploy"),
     path("healthz/", views.healthz, name="healthz"),
-    path("api/box/<uuid:box_uuid>/batch/", views.box_batch, name="box_batch"),
+    path("api/batch/", views.image_batch, name="image_batch"),
     path("api/image/<int:image_id>/", views.image_save, name="image_save"),
     path(
         "api/image/<int:image_id>/fragment/",

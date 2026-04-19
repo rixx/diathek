@@ -22,36 +22,25 @@ def box(db):
     return BoxFactory(name="Dachboden")
 
 
-def _post(client, box, data):
-    return client.post(reverse("box_batch", args=[box.uuid]), data=data)
+def _post(client, data):
+    return client.post(reverse("image_batch"), data=data)
 
 
 @pytest.mark.django_db
-def test_batch_requires_login(client, box):
-    response = client.post(reverse("box_batch", args=[box.uuid]))
+def test_batch_requires_login(client):
+    response = client.post(reverse("image_batch"))
 
     assert response.status_code == 302
 
 
 @pytest.mark.django_db
-def test_batch_returns_404_for_unknown_box(auth_client):
-    response = auth_client.post(
-        reverse("box_batch", args=["00000000-0000-0000-0000-000000000000"])
-    )
-
-    assert response.status_code == 404
-
-
-@pytest.mark.django_db
-def test_batch_rejects_archived_box(auth_client, box):
+def test_batch_rejects_image_in_archived_box(auth_client, box):
+    image = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
     box.archived = True
     box.save(user=auth_client.user)
-    image = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
 
     response = _post(
-        auth_client,
-        box,
-        {"action": "place_todo", "value": "true", "image_ids": [image.pk]},
+        auth_client, {"action": "place_todo", "value": "true", "image_ids": [image.pk]}
     )
 
     assert response.status_code == 403
@@ -60,18 +49,50 @@ def test_batch_rejects_archived_box(auth_client, box):
 
 
 @pytest.mark.django_db
-def test_batch_requires_at_least_one_image_id(auth_client, box):
-    response = _post(auth_client, box, {"action": "place_todo", "value": "true"})
+def test_batch_rejects_unsorted_image(auth_client):
+    image = ImageFactory(box=None, filename="orphan.jpg")
+
+    response = _post(
+        auth_client, {"action": "place_todo", "value": "true", "image_ids": [image.pk]}
+    )
+
+    assert response.status_code == 403
+    image.refresh_from_db()
+    assert image.place_todo is False
+
+
+@pytest.mark.django_db
+def test_batch_rejects_mixed_selection_with_archived_box(auth_client, box):
+    archived_box = BoxFactory(name="Archiv")
+    ok = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+    bad = ImageFactory(box=archived_box, sequence_in_box=1, filename="b.jpg")
+    archived_box.archived = True
+    archived_box.save(user=auth_client.user)
+
+    response = _post(
+        auth_client,
+        {"action": "place_todo", "value": "true", "image_ids": [ok.pk, bad.pk]},
+    )
+
+    assert response.status_code == 403
+    ok.refresh_from_db()
+    bad.refresh_from_db()
+    assert ok.place_todo is False
+    assert bad.place_todo is False
+
+
+@pytest.mark.django_db
+def test_batch_requires_at_least_one_image_id(auth_client):
+    response = _post(auth_client, {"action": "place_todo", "value": "true"})
 
     assert response.status_code == 400
     assert "Bild" in response.json()["error"]
 
 
 @pytest.mark.django_db
-def test_batch_rejects_non_integer_image_id(auth_client, box):
+def test_batch_rejects_non_integer_image_id(auth_client):
     response = _post(
         auth_client,
-        box,
         {"action": "place_todo", "value": "true", "image_ids": "not-a-number"},
     )
 
@@ -80,25 +101,20 @@ def test_batch_rejects_non_integer_image_id(auth_client, box):
 
 
 @pytest.mark.django_db
-def test_batch_rejects_image_from_different_box(auth_client, box):
-    other_box = BoxFactory(name="Andere")
-    image = ImageFactory(box=other_box, sequence_in_box=1, filename="a.jpg")
-
+def test_batch_rejects_unknown_image_id(auth_client):
     response = _post(
-        auth_client,
-        box,
-        {"action": "place_todo", "value": "true", "image_ids": [image.pk]},
+        auth_client, {"action": "place_todo", "value": "true", "image_ids": [99999]}
     )
 
     assert response.status_code == 400
-    assert "gehören nicht" in response.json()["error"]
+    assert "nicht gefunden" in response.json()["error"]
 
 
 @pytest.mark.django_db
 def test_batch_rejects_unknown_action(auth_client, box):
     image = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
 
-    response = _post(auth_client, box, {"action": "nope", "image_ids": [image.pk]})
+    response = _post(auth_client, {"action": "nope", "image_ids": [image.pk]})
 
     assert response.status_code == 400
     assert "Aktion" in response.json()["error"]
@@ -112,7 +128,6 @@ def test_batch_set_place_todo_writes_each_image_and_logs(auth_client, box):
 
     response = _post(
         auth_client,
-        box,
         {"action": "place_todo", "value": "true", "image_ids": [a.pk, b.pk]},
     )
 
@@ -129,6 +144,26 @@ def test_batch_set_place_todo_writes_each_image_and_logs(auth_client, box):
 
 
 @pytest.mark.django_db
+def test_batch_accepts_images_from_multiple_boxes(auth_client):
+    box_a = BoxFactory(name="Dachboden")
+    box_b = BoxFactory(name="Keller")
+    a = ImageFactory(box=box_a, sequence_in_box=1, filename="a.jpg")
+    b = ImageFactory(box=box_b, sequence_in_box=1, filename="b.jpg")
+
+    response = _post(
+        auth_client,
+        {"action": "place_todo", "value": "true", "image_ids": [a.pk, b.pk]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["updated"] == 2
+    a.refresh_from_db()
+    b.refresh_from_db()
+    assert a.place_todo is True
+    assert b.place_todo is True
+
+
+@pytest.mark.django_db
 def test_batch_skips_images_already_at_target_value(auth_client, box):
     a = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place_todo=True)
     b = ImageFactory(box=box, sequence_in_box=2, filename="b.jpg")
@@ -137,7 +172,6 @@ def test_batch_skips_images_already_at_target_value(auth_client, box):
 
     response = _post(
         auth_client,
-        box,
         {"action": "place_todo", "value": "true", "image_ids": [a.pk, b.pk]},
     )
 
@@ -157,7 +191,6 @@ def test_batch_apply_place_resolves_or_creates_place(auth_client, box):
 
     response = _post(
         auth_client,
-        box,
         {"action": "place", "place": "Neuer Ort", "image_ids": [a.pk, b.pk]},
     )
 
@@ -177,7 +210,7 @@ def test_batch_apply_place_with_existing_name_reuses_row(auth_client, box):
     a = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
 
     response = _post(
-        auth_client, box, {"action": "place", "place": "Garten", "image_ids": [a.pk]}
+        auth_client, {"action": "place", "place": "Garten", "image_ids": [a.pk]}
     )
 
     assert response.status_code == 200
@@ -191,9 +224,7 @@ def test_batch_apply_place_empty_clears_place(auth_client, box):
     place = PlaceFactory(name="Garten")
     a = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=place)
 
-    response = _post(
-        auth_client, box, {"action": "place", "place": "", "image_ids": [a.pk]}
-    )
+    response = _post(auth_client, {"action": "place", "place": "", "image_ids": [a.pk]})
 
     assert response.status_code == 200
     a.refresh_from_db()
@@ -206,7 +237,6 @@ def test_batch_apply_date_writes_parsed_fields(auth_client, box):
 
     response = _post(
         auth_client,
-        box,
         {"action": "date_display", "date_display": "summer 1987", "image_ids": [a.pk]},
     )
 
@@ -224,7 +254,6 @@ def test_batch_apply_date_invalid_returns_400(auth_client, box):
 
     response = _post(
         auth_client,
-        box,
         {"action": "date_display", "date_display": "asdfqwer", "image_ids": [a.pk]},
     )
 
@@ -246,7 +275,7 @@ def test_batch_clear_todos_resets_all_four_fields(auth_client, box):
         edit_todo="Rot",
     )
 
-    response = _post(auth_client, box, {"action": "clear_todos", "image_ids": [a.pk]})
+    response = _post(auth_client, {"action": "clear_todos", "image_ids": [a.pk]})
 
     assert response.status_code == 200
     a.refresh_from_db()
@@ -262,7 +291,6 @@ def test_batch_set_edit_todo_writes_text_value(auth_client, box):
 
     response = _post(
         auth_client,
-        box,
         {"action": "edit_todo", "value": "Rot reduzieren", "image_ids": [a.pk]},
     )
 
@@ -272,8 +300,8 @@ def test_batch_set_edit_todo_writes_text_value(auth_client, box):
 
 
 @pytest.mark.django_db
-def test_batch_rejects_get_method(auth_client, box):
-    response = auth_client.get(reverse("box_batch", args=[box.uuid]))
+def test_batch_rejects_get_method(auth_client):
+    response = auth_client.get(reverse("image_batch"))
 
     assert response.status_code == 405
 
@@ -286,8 +314,9 @@ def test_grid_renders_batch_bar_and_todo_modal_for_active_box(auth_client, box):
 
     content = response.content.decode()
     assert "data-batch-bar" in content
-    assert "data-todo-modal" in content
-    assert reverse("box_batch", args=[box.uuid]) in content
+    assert "data-batch-todo-modal" in content
+    assert "data-batch-root" in content
+    assert reverse("image_batch") in content
 
 
 @pytest.mark.django_db
@@ -299,9 +328,22 @@ def test_grid_omits_batch_bar_for_archived_box(auth_client, box):
     response = auth_client.get(reverse("box_grid", args=[box.uuid]))
 
     content = response.content.decode()
-    assert 'class="batch-bar"' not in content
-    assert 'class="todo-modal"' not in content
-    assert reverse("box_batch", args=[box.uuid]) not in content
+    assert "data-batch-bar" not in content
+    assert "data-batch-todo-modal" not in content
+    assert "data-batch-root" not in content
+
+
+@pytest.mark.django_db
+def test_gallery_renders_batch_bar_and_todo_modal(auth_client, box):
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+
+    response = auth_client.get(reverse("gallery"))
+
+    content = response.content.decode()
+    assert "data-batch-bar" in content
+    assert "data-batch-todo-modal" in content
+    assert "data-batch-root" in content
+    assert reverse("image_batch") in content
 
 
 @pytest.mark.django_db

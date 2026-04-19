@@ -133,32 +133,6 @@ main:has(.detail-layout) {
 .date-preview { font-size: 0.8rem; margin: 0.25rem 0 0; color: #555; min-height: 1.2em; }
 .date-preview.error { color: #b00; }
 
-.todo-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-}
-.todo-modal[hidden] { display: none; }
-.todo-modal-panel {
-    background: #fff;
-    color: #222;
-    padding: 1.5rem;
-    max-width: 24rem;
-    width: 100%;
-    border-radius: 0.25rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    display: grid;
-    gap: 0.75rem;
-}
-.todo-modal-panel h2 { margin: 0; font-size: 1rem; }
-.todo-modal-panel label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.95rem; }
-.todo-modal-panel input[type=text] { width: 100%; box-sizing: border-box; padding: 0.25rem; }
-.todo-modal-panel .todo-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-
 .shortcut-help {
     position: fixed;
     inset: 0;

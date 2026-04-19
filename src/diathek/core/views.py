@@ -699,11 +699,7 @@ def _diff_updates(image, updates):
 
 @login_required
 @require_POST
-def box_batch(request, box_uuid):
-    box = get_object_or_404(Box, uuid=box_uuid)
-    if box.archived:
-        return JsonResponse({"error": "Box ist archiviert."}, status=403)
-
+def image_batch(request):
     raw_ids = request.POST.getlist("image_ids")
     image_ids = []
     for raw in raw_ids:
@@ -725,11 +721,16 @@ def box_batch(request, box_uuid):
         images = list(
             Image.objects.select_for_update()
             .select_related("box", "place")
-            .filter(box=box, pk__in=image_ids)
+            .filter(pk__in=image_ids)
         )
         if len(images) != len(set(image_ids)):
             return JsonResponse(
-                {"error": "Einige Bilder gehören nicht zu dieser Box."}, status=400
+                {"error": "Einige Bilder wurden nicht gefunden."}, status=400
+            )
+        if any(image.box is None or image.box.archived for image in images):
+            return JsonResponse(
+                {"error": "Auswahl enthält archivierte oder unsortierte Bilder."},
+                status=403,
             )
 
         if action == "place":
