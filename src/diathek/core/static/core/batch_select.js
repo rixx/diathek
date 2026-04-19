@@ -7,6 +7,8 @@
     const batchCount = root.querySelector("[data-batch-count]");
     const batchError = root.querySelector("[data-batch-error]");
     const todoModal = root.querySelector("[data-batch-todo-modal]");
+    const placeModal = root.querySelector("[data-batch-place-modal]");
+    const dateModal = root.querySelector("[data-batch-date-modal]");
     const csrfInput = document.querySelector("[name=csrfmiddlewaretoken]");
     const csrfToken = csrfInput ? csrfInput.value : "";
 
@@ -126,16 +128,51 @@
         window.location.reload();
     }
 
-    function promptApplyPlace() {
-        const value = window.prompt("Ort für Auswahl:");
-        if (value === null) return;
-        postBatch({ action: "place", place: value }).then(r => { if (r) reloadAfterSave(); });
+    function resetInput(modal) {
+        if (!modal) return null;
+        const input = modal.querySelector("input[type=text]");
+        if (!input) return null;
+        input.value = "";
+        const suggestions = modal.querySelector("[data-place-suggestions], [data-date-suggestions]");
+        if (suggestions) suggestions.hidden = true;
+        const preview = modal.querySelector("[data-date-preview]");
+        if (preview) { preview.textContent = ""; preview.classList.remove("error"); }
+        return input;
     }
 
-    function promptApplyDate() {
-        const value = window.prompt("Datum für Auswahl:");
-        if (value === null) return;
-        postBatch({ action: "date_display", date_display: value }).then(r => { if (r) reloadAfterSave(); });
+    function showModal(modal) {
+        if (!modal) return;
+        const input = resetInput(modal);
+        modal.hidden = false;
+        if (input) input.focus();
+    }
+
+    function hideModal(modal) { if (modal) modal.hidden = true; }
+
+    function showPlaceModal() { showModal(placeModal); }
+    function hidePlaceModal() { hideModal(placeModal); }
+
+    function showDateModal() { showModal(dateModal); }
+    function hideDateModal() { hideModal(dateModal); }
+
+    async function applyPlaceModal() {
+        const input = placeModal.querySelector("input[name=place]");
+        const value = input ? input.value : "";
+        const r = await postBatch({ action: "place", place: value });
+        if (r) {
+            hidePlaceModal();
+            reloadAfterSave();
+        }
+    }
+
+    async function applyDateModal() {
+        const input = dateModal.querySelector("input[name=date_display]");
+        const value = input ? input.value : "";
+        const r = await postBatch({ action: "date_display", date_display: value });
+        if (r) {
+            hideDateModal();
+            reloadAfterSave();
+        }
     }
 
     function promptClearTodos() {
@@ -177,10 +214,29 @@
         if (any) reloadAfterSave();
     }
 
-    if (todoModal) {
-        todoModal.addEventListener("click", (ev) => { if (ev.target === todoModal) hideTodoModal(); });
-        todoModal.querySelector("[data-todo-modal-cancel]").addEventListener("click", hideTodoModal);
-        todoModal.querySelector("[data-todo-modal-apply]").addEventListener("click", applyTodoModal);
+    function bindModal(modal, onCancel, onApply) {
+        if (!modal) return;
+        modal.addEventListener("click", (ev) => { if (ev.target === modal) onCancel(); });
+        const cancel = modal.querySelector("[data-batch-modal-cancel], [data-todo-modal-cancel]");
+        const apply = modal.querySelector("[data-batch-modal-apply], [data-todo-modal-apply]");
+        if (cancel) cancel.addEventListener("click", onCancel);
+        if (apply) apply.addEventListener("click", onApply);
+    }
+
+    bindModal(placeModal, hidePlaceModal, applyPlaceModal);
+    bindModal(dateModal, hideDateModal, applyDateModal);
+    bindModal(todoModal, hideTodoModal, applyTodoModal);
+
+    function anyModalVisible() {
+        return (placeModal && !placeModal.hidden)
+            || (dateModal && !dateModal.hidden)
+            || (todoModal && !todoModal.hidden);
+    }
+
+    function hideAllModals() {
+        hidePlaceModal();
+        hideDateModal();
+        hideTodoModal();
     }
 
     if (batchBar) {
@@ -208,8 +264,8 @@
             const promptBtn = ev.target.closest("[data-batch-prompt]");
             if (!promptBtn) return;
             const which = promptBtn.dataset.batchPrompt;
-            if (which === "place") promptApplyPlace();
-            else if (which === "date") promptApplyDate();
+            if (which === "place") showPlaceModal();
+            else if (which === "date") showDateModal();
             else if (which === "todos") showTodoModal();
             else if (which === "clear-todos") promptClearTodos();
         });
@@ -219,9 +275,9 @@
         if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
 
         if (ev.key === "Escape") {
-            if (todoModal && !todoModal.hidden) {
+            if (anyModalVisible()) {
                 ev.preventDefault();
-                hideTodoModal();
+                hideAllModals();
                 return;
             }
             if (selectMode) {

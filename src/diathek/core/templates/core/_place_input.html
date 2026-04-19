@@ -1,0 +1,42 @@
+{% comment %}
+Rich place input: recent-places pills, combobox with autocomplete, optional warning.
+Args:
+    image          Image instance. Enables htmx inline-save and populates current value.
+                   Omit for batch/modal usage (renders empty, no htmx attrs).
+    recent_places  iterable of Place objects for quick-pick pills.
+{% endcomment %}
+<div class="field place-field" data-place-field>
+    <span>Ort</span>
+    {% if recent_places %}
+    <div class="place-pills" data-place-pills>
+        {% for p in recent_places %}
+        <button type="button"
+                class="place-pill{% if not p.has_coords %} place-pill--no-coords{% endif %}"
+                data-place-name="{{ p.name }}">
+            {{ p.name }}{% if not p.has_coords %} ⚠{% endif %}
+        </button>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="place-combobox">
+        <input type="text"
+               name="place"
+               value="{% if image.place %}{{ image.place.name }}{% endif %}"
+               autocomplete="off"
+               placeholder="Ort eingeben oder suchen"
+               {% if image %}
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-trigger="change"
+               hx-preserve="true"
+               {% endif %}
+               data-place-input
+               data-autocomplete-url="{% url 'place_autocomplete' %}">
+        <ul class="place-suggestions" data-place-suggestions hidden></ul>
+    </div>
+    {% if image.place and not image.place.has_coords %}
+    <p class="place-warning">⚠ Ort hat keine Koordinaten.</p>
+    {% endif %}
+</div>

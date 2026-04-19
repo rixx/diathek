@@ -1,0 +1,36 @@
+{% comment %}
+Rich date input: recent-dates pills, combobox with word-suggestions and parse preview.
+Args:
+    image         Image instance. Enables htmx inline-save and populates current value.
+                  Omit for batch/modal usage (renders empty, no htmx attrs).
+    recent_dates  iterable of date-display strings for quick-pick pills.
+{% endcomment %}
+<div class="field date-field" data-date-field>
+    <span>Datum</span>
+    {% if recent_dates %}
+    <div class="date-pills" data-date-pills>
+        {% for d in recent_dates %}
+        <button type="button" class="date-pill" data-date-value="{{ d }}">{{ d }}</button>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="date-combobox">
+        <input type="text"
+               name="date_display"
+               value="{% if image %}{{ image.date_display }}{% endif %}"
+               autocomplete="off"
+               placeholder="z. B. Sommer 1987, ~1985, 1985–88"
+               {% if image %}
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-trigger="change"
+               hx-preserve="true"
+               {% endif %}
+               data-date-input
+               data-autocomplete-url="{% url 'date_autocomplete' %}">
+        <ul class="date-suggestions" data-date-suggestions hidden></ul>
+    </div>
+    <p class="date-preview" data-date-preview aria-live="polite"></p>
+</div>

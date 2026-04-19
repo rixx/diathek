@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{% static 'core/diathek.css' %}">
     <link rel="icon" type="image/svg+xml" href="{% static 'core/favicon.svg' %}">
     <script src="{% static 'core/htmx.min.js' %}" defer></script>
+    <script src="{% static 'core/metadata_inputs.js' %}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body{% if user.is_authenticated %} hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% endif %}>

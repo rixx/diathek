@@ -817,3 +817,90 @@ h1, h2, h3 {
 .todo-modal-panel label { display: flex; gap: 0.5rem; align-items: center; font-size: 0.95rem; }
 .todo-modal-panel input[type=text] { width: 100%; box-sizing: border-box; padding: 0.25rem; }
 .todo-modal-panel .todo-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+/* Rich place + date inputs — shared between the single-image metadata form
+   (detail.html) and the batch-action modals (grid/gallery). */
+.metadata-form { display: grid; gap: 0.5rem; }
+.metadata-form .field { display: grid; gap: 0.2rem; }
+.metadata-form .field.checkbox { grid-template-columns: auto 1fr; align-items: center; gap: 0.5rem; }
+.metadata-form select,
+.metadata-form input[type=text],
+.metadata-form textarea { width: 100%; box-sizing: border-box; }
+.metadata-form .metadata-error { color: #b00; }
+.metadata-form .metadata-conflict { background: #ffd; padding: 0.3rem 0.5rem; }
+.metadata-form.conflict { outline: 2px solid #d90; }
+
+.place-field { position: relative; }
+.place-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.25rem; }
+.place-pill {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #ccc;
+    background: #f6f6f6;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.place-pill:hover { background: #eee; }
+.place-pill--no-coords { border-style: dashed; color: #885500; }
+.place-combobox { position: relative; }
+.place-combobox input[type=text] { width: 100%; box-sizing: border-box; }
+.place-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #ccc;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+}
+.place-suggestions[hidden] { display: none; }
+.place-suggestions li {
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+}
+.place-suggestions li.active,
+.place-suggestions li:hover { background: #eef; }
+.place-suggestions li.no-coords { color: #885500; }
+.place-warning { font-size: 0.8rem; color: #885500; margin: 0.25rem 0 0; }
+
+.date-field { position: relative; }
+.date-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.25rem; }
+.date-pill {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #ccc;
+    background: #f6f6f6;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.date-pill:hover { background: #eee; }
+.date-combobox { position: relative; }
+.date-combobox input[type=text] { width: 100%; box-sizing: border-box; }
+.date-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #ccc;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+}
+.date-suggestions[hidden] { display: none; }
+.date-suggestions li {
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+}
+.date-suggestions li.active,
+.date-suggestions li:hover { background: #eef; }
+.date-preview { font-size: 0.8rem; margin: 0.25rem 0 0; color: #555; min-height: 1.2em; }
+.date-preview.error { color: #b00; }

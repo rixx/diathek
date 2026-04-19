@@ -588,6 +588,8 @@ def gallery(request):
             "active_sort": active_sort,
             "active_place": active_place,
             "total_count": total_count,
+            "recent_places": list(Place.objects.recent()),
+            "recent_dates": Image.recent_date_displays(),
         },
     )
 
@@ -612,6 +614,8 @@ def box_grid(request, box_uuid):
             "total_count": box.images.count(),
             "collections": list(box.collections.order_by("-updated_at")),
             "tile_clickable": not box.archived,
+            "recent_places": list(Place.objects.recent()),
+            "recent_dates": Image.recent_date_displays(),
         },
     )
 
