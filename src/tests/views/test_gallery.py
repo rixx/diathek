@@ -300,9 +300,7 @@ def test_gallery_renders_filter_and_sort_chips_with_active_marker(auth_client):
     box = BoxFactory()
     ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place_todo=True)
 
-    response = auth_client.get(
-        reverse("gallery") + "?filter=place-todo&sort=date-desc"
-    )
+    response = auth_client.get(reverse("gallery") + "?filter=place-todo&sort=date-desc")
 
     content = response.content.decode()
     assert 'href="?filter=all&amp;sort=date-desc"' in content

@@ -525,9 +525,7 @@ def _apply_gallery_filter(qs, key):
 def _apply_gallery_sort(qs, key):
     box_tiebreak = ("box__sort_order", "box__name", "sequence_in_box")
     if key == "date-desc":
-        return qs.order_by(
-            F("date_earliest").desc(nulls_last=True), *box_tiebreak
-        )
+        return qs.order_by(F("date_earliest").desc(nulls_last=True), *box_tiebreak)
     if key == "box":
         return qs.order_by(*box_tiebreak)
     return qs.order_by(F("date_earliest").asc(nulls_last=True), *box_tiebreak)
@@ -539,9 +537,7 @@ def gallery(request):
     active_filter = raw_filter if raw_filter in GALLERY_FILTER_KEYS else "all"
     raw_sort = request.GET.get("sort", "date")
     active_sort = raw_sort if raw_sort in GALLERY_SORT_KEYS else "date"
-    base_qs = Image.objects.select_related("box", "place").filter(
-        box__archived=False
-    )
+    base_qs = Image.objects.select_related("box", "place").filter(box__archived=False)
     total_count = base_qs.count()
     filtered = _apply_gallery_filter(base_qs, active_filter)
     ordered = _apply_gallery_sort(filtered, active_sort)

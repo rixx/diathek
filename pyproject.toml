@@ -83,6 +83,9 @@ exclude_also = [
   "NotImplementedError",
 ]
 
+[tool.ruff]
+extend-exclude = ["scripts"]
+
 [tool.ruff.format]
 skip-magic-trailing-comma = true
 
