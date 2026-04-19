@@ -80,7 +80,10 @@ _SEASON_ALT = "|".join(sorted(SEASONS, key=len, reverse=True))
 _Y = r"(?:\d{4}|\d{2})"
 
 _RE_EXACT_ISO = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})$")
-_RE_EXACT_DE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
+_RE_EXACT_DE = re.compile(r"^(\d{1,2})\s*[./]\s*(\d{1,2})\s*[./]\s*(\d{4})$")
+_RE_EXACT_DAY_MONTH_NAME = re.compile(
+    rf"^(\d{{1,2}})\.?[ ./_-]+({_MONTH_ALT})\.?[ ./_-]+({_Y})$"
+)
 _RE_MONTH_ISO = re.compile(r"^(\d{4})-(\d{1,2})$")
 _RE_MONTH_NUM = re.compile(rf"^(\d{{1,2}})[./]({_Y})$")
 _RE_MONTH_NAME = re.compile(rf"^({_MONTH_ALT})\.?[ ./_-]+({_Y})$")
@@ -169,6 +172,20 @@ def _match_exact_de(norm, base):
     except ValueError as err:
         raise ParseError(f"Ungültiges Datum: {base!r}") from err
     return ParsedDate(earliest=day, latest=day, precision=EXACT, display=base)
+
+
+def _match_exact_day_month_name(norm, base):
+    m = _RE_EXACT_DAY_MONTH_NAME.match(norm)
+    if not m:
+        return None
+    month = MONTHS[m[2]]
+    year = _expand_year(m[3])
+    try:
+        day = datetime.date(year, month, int(m[1]))
+    except ValueError as err:
+        raise ParseError(f"Ungültiges Datum: {base!r}") from err
+    display = _rebuild_with_years(base, m, [(3, year)])
+    return ParsedDate(earliest=day, latest=day, precision=EXACT, display=display)
 
 
 def _match_fuzzy_year(norm, base):
@@ -318,6 +335,7 @@ def _match_year(norm, base):
 _MATCHERS = (
     _match_exact_iso,
     _match_exact_de,
+    _match_exact_day_month_name,
     _match_fuzzy_year,
     _match_season,
     _match_decade_mod,

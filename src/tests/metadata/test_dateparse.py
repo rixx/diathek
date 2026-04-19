@@ -34,6 +34,46 @@ def test_exact_german_date_day_dot_month_dot_year():
     assert _triple(result) == (D(1987, 7, 15), D(1987, 7, 15), "exact")
 
 
+@pytest.mark.parametrize(
+    "text", ("25/12/1990", "25 / 12 / 1990", "25. 12. 1990", "25/ 12 /1990")
+)
+def test_exact_german_accepts_slashes_and_spaces(text):
+    assert _triple(parse(text)) == (D(1990, 12, 25), D(1990, 12, 25), "exact")
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "25. dezember 1990",
+        "25 dezember 1990",
+        "25. Dezember 1990",
+        "25.dezember.1990",
+        "25 dec 1990",
+        "25 december 1990",
+        "25. dez 1990",
+    ),
+)
+def test_exact_day_with_month_name(text):
+    assert _triple(parse(text)) == (D(1990, 12, 25), D(1990, 12, 25), "exact")
+
+
+def test_exact_day_with_month_name_two_digit_year_expands_in_display():
+    result = parse("25. dezember 90")
+
+    assert _triple(result) == (D(1990, 12, 25), D(1990, 12, 25), "exact")
+    assert result.display == "25. dezember 1990"
+
+
+def test_exact_day_with_month_name_invalid_calendar_date_raises():
+    with pytest.raises(ParseError, match="Ungültiges Datum"):
+        parse("32. dezember 1990")
+
+
+def test_exact_day_with_month_name_february_overflow_raises():
+    with pytest.raises(ParseError, match="Ungültiges Datum"):
+        parse("30. februar 1990")
+
+
 def test_exact_iso_with_single_digit_month_and_day():
     assert _triple(parse("1987-7-5")) == (D(1987, 7, 5), D(1987, 7, 5), "exact")
 
