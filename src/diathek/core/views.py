@@ -611,6 +611,7 @@ def box_grid(request, box_uuid):
             "active_filter": active_filter,
             "total_count": box.images.count(),
             "collections": list(box.collections.order_by("-updated_at")),
+            "tile_clickable": not box.archived,
         },
     )
 

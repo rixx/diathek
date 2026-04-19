@@ -1,0 +1,43 @@
+{% comment %}
+Shared image tile. Context:
+    image           Image instance (with box, place preselected)
+    tile_clickable  bool — False renders a <span> instead of <a>
+    show_sequence   bool — shows sequence_in_box (grid view)
+    show_box        bool — shows box name (gallery view)
+    archived_title  bool — add title="Box ist archiviert" (archived grid)
+{% endcomment %}
+{% if tile_clickable %}
+<a class="image-tile" href="{% url 'image_detail' image.box.uuid image.pk %}" data-image-id="{{ image.pk }}">
+{% else %}
+<span class="image-tile image-tile--archived" data-image-id="{{ image.pk }}"{% if archived_title %} title="Box ist archiviert"{% endif %}>
+{% endif %}
+    {% if image.thumb_small %}
+    <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy"
+         class="{% if image.needs_flip %}image-flipped{% endif %}">
+    {% else %}
+    <span class="image-tile-placeholder">{{ image.filename }}</span>
+    {% endif %}
+    {% if image.date_display %}
+    <span class="image-tile-date" title="{{ image.date_display }}">{{ image.date_display }}</span>
+    {% else %}
+    <span class="image-tile-date image-tile-date--missing">kein Datum</span>
+    {% endif %}
+    <span class="image-tile-todos">
+        {% if image.place_todo %}<span class="todo-icon place-todo" title="Ort unklar">O</span>{% endif %}
+        {% if image.date_todo %}<span class="todo-icon date-todo" title="Datum unklar">D</span>{% endif %}
+        {% if image.needs_flip %}<span class="todo-icon flip-todo" title="Spiegeln">F</span>{% endif %}
+        {% if image.edit_todo %}<span class="todo-icon edit-todo" title="Lightroom-Notiz">L</span>{% endif %}
+    </span>
+    <span class="image-tile-footer">
+        {% if image.place %}
+        <span class="image-tile-place" title="{{ image.place.name }}">{{ image.place.name }}</span>
+        {% else %}
+        <span class="image-tile-place image-tile-place--missing">kein Ort</span>
+        {% endif %}
+        {% if show_box %}
+        <span class="image-tile-box" title="{{ image.box.name }}">{{ image.box.name }}</span>
+        {% elif show_sequence %}
+        <span class="image-tile-sequence">{{ image.sequence_in_box }}</span>
+        {% endif %}
+    </span>
+{% if tile_clickable %}</a>{% else %}</span>{% endif %}

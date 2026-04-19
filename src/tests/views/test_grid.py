@@ -275,25 +275,28 @@ def test_grid_tile_shows_todo_icons_and_sequence(auth_client, box):
 
 
 @pytest.mark.django_db
-def test_grid_untagged_image_shows_untagged_marker(auth_client, box):
+def test_grid_untagged_image_shows_no_date_and_no_place_labels(auth_client, box):
     ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
 
     response = auth_client.get(reverse("box_grid", args=[box.uuid]))
 
     content = response.content.decode()
-    assert "tag-state untagged" in content
-    assert "ungetaggt" in content
+    assert "image-tile-date--missing" in content
+    assert "kein Datum" in content
+    assert "image-tile-place--missing" in content
+    assert "kein Ort" in content
 
 
 @pytest.mark.django_db
-def test_grid_tagged_image_has_no_untagged_marker(auth_client, box):
+def test_grid_tagged_image_has_no_missing_place_marker(auth_client, box):
     place = PlaceFactory(name="Garten")
     ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=place)
 
     response = auth_client.get(reverse("box_grid", args=[box.uuid]))
 
     content = response.content.decode()
-    assert "tag-state untagged" not in content
+    assert "image-tile-place--missing" not in content
+    assert "Garten" in content
 
 
 @pytest.mark.django_db
@@ -307,9 +310,9 @@ def test_grid_for_archived_box_renders_non_clickable_tiles(auth_client, box):
     assert response.status_code == 200
     content = response.content.decode()
     assert "schreibgeschützt" in content
-    assert "grid-tile archived" in content
-    # no <a class="grid-tile"> — tiles are <span> on archived boxes
-    assert '<a class="grid-tile"' not in content
+    assert "image-tile--archived" in content
+    # tiles are <span> on archived boxes, not <a>
+    assert '<a class="image-tile"' not in content
 
 
 @pytest.mark.django_db

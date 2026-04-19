@@ -280,7 +280,7 @@ def test_gallery_tile_renders_no_date_badge_for_undated_image(auth_client):
     response = auth_client.get(reverse("gallery"))
 
     content = response.content.decode()
-    assert "date-badge no-date" in content
+    assert "image-tile-date--missing" in content
     assert "kein Datum" in content
 
 
@@ -300,7 +300,7 @@ def test_gallery_tile_renders_date_display_when_present(auth_client):
 
     content = response.content.decode()
     assert "Juli 1987" in content
-    assert "date-badge no-date" not in content
+    assert "image-tile-date--missing" not in content
 
 
 @pytest.mark.django_db

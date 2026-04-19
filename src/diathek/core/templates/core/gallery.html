@@ -47,101 +47,6 @@
 }
 .gallery-count { font-size: 0.8rem; color: #666; margin-left: auto; }
 
-.gallery-tiles {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.5rem;
-}
-.gallery-tile {
-    position: relative;
-    display: block;
-    aspect-ratio: 3 / 2;
-    text-decoration: none;
-    color: inherit;
-    border: 2px solid transparent;
-    background: #000;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
-    border-radius: 4px;
-    overflow: hidden;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-.gallery-tile:hover {
-    border-color: #036;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-.gallery-tile img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    background: #000;
-}
-.gallery-tile .placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #222;
-    color: #aaa;
-    font-size: 0.75rem;
-    padding: 0.25rem;
-    text-align: center;
-    word-break: break-all;
-}
-.gallery-tile .date-badge {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    background: rgba(0, 0, 0, 0.65);
-    color: #fff;
-    font-size: 0.75rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.2rem;
-    max-width: calc(100% - 4px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.gallery-tile .date-badge.no-date { background: rgba(200, 50, 50, 0.85); }
-.gallery-tile .box-badge {
-    position: absolute;
-    left: 2px;
-    right: 2px;
-    bottom: 2px;
-    background: rgba(0, 0, 0, 0.65);
-    color: #fff;
-    font-size: 0.7rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.2rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.gallery-tile .todos {
-    position: absolute;
-    top: 2px;
-    right: 2px;
-    display: flex;
-    gap: 0.15rem;
-}
-.gallery-tile .todo-icon {
-    font-size: 0.75rem;
-    width: 1.15rem;
-    height: 1.15rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    border-radius: 0.2rem;
-    font-weight: 700;
-}
-.gallery-tile .todo-icon.place-todo { background: #c05a00; }
-.gallery-tile .todo-icon.date-todo { background: #a03080; }
-.gallery-tile .todo-icon.flip-todo { background: #0a6; }
-.gallery-tile .todo-icon.edit-todo { background: #888; }
 .gallery-empty { padding: 2rem; text-align: center; color: #666; }
 </style>
 {% endblock %}
@@ -189,30 +94,9 @@
     </nav>
 
     {% if images %}
-    <div class="gallery-tiles">
+    <div class="image-tiles">
         {% for image in images %}
-        <a class="gallery-tile"
-           href="{% url 'image_detail' image.box.uuid image.pk %}"
-           data-image-id="{{ image.pk }}">
-            {% if image.thumb_small %}
-            <img src="{{ image.thumb_small.url }}" alt="{{ image.filename }}" loading="lazy"
-                 class="{% if image.needs_flip %}image-flipped{% endif %}">
-            {% else %}
-            <div class="placeholder">{{ image.filename }}</div>
-            {% endif %}
-            {% if image.date_display %}
-            <span class="date-badge" title="{{ image.date_display }}">{{ image.date_display }}</span>
-            {% else %}
-            <span class="date-badge no-date">kein Datum</span>
-            {% endif %}
-            <span class="todos">
-                {% if image.place_todo %}<span class="todo-icon place-todo" title="Ort unklar">O</span>{% endif %}
-                {% if image.date_todo %}<span class="todo-icon date-todo" title="Datum unklar">D</span>{% endif %}
-                {% if image.needs_flip %}<span class="todo-icon flip-todo" title="Spiegeln">F</span>{% endif %}
-                {% if image.edit_todo %}<span class="todo-icon edit-todo" title="Lightroom-Notiz">L</span>{% endif %}
-            </span>
-            <span class="box-badge" title="{{ image.box.name }}">{{ image.box.name }}</span>
-        </a>
+        {% include "core/_image_tile.html" with tile_clickable=True show_sequence=False show_box=True archived_title=False %}
         {% endfor %}
     </div>
     {% else %}
