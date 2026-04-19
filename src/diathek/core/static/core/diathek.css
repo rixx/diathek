@@ -122,10 +122,10 @@ h1, h2, h3 {
     transform: rotate(45deg);
     display: inline-block;
 }
-.site-nav-deploy {
+.site-nav .site-nav-deploy {
     margin-left: auto;
 }
-.site-nav-deploy + .site-nav-user {
+.site-nav .site-nav-deploy + .site-nav-user {
     margin-left: var(--space-lg);
 }
 .site-nav-deploying {
