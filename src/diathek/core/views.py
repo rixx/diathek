@@ -281,7 +281,7 @@ def api_upload(request):
 @_staff_required
 def unsorted_view(request):
     images = Image.objects.filter(box__isnull=True).order_by("filename")
-    active_boxes = Box.objects.filter(archived=False).order_by("sort_order", "name")
+    active_boxes = Box.objects.filter(archived=False).order_by("-sort_order", "-name")
     return render(
         request, "core/unsorted.html", {"images": images, "boxes": active_boxes}
     )
