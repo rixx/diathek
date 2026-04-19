@@ -165,14 +165,55 @@ def test_gallery_filter_has_date(auth_client):
 @pytest.mark.django_db
 def test_gallery_filter_delegates_to_grid_filters(auth_client):
     box = BoxFactory()
-    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+    place = PlaceFactory()
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=place)
     flagged = ImageFactory(
-        box=box, sequence_in_box=2, filename="b.jpg", place_todo=True
+        box=box, sequence_in_box=2, filename="b.jpg", place=place, place_todo=True
     )
 
     response = auth_client.get(reverse("gallery") + "?filter=place-todo")
 
     assert list(response.context["images"]) == [flagged]
+
+
+@pytest.mark.django_db
+def test_gallery_filter_place_todo_includes_images_without_place(auth_client):
+    box = BoxFactory()
+    place = PlaceFactory()
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=place)
+    flagged = ImageFactory(
+        box=box, sequence_in_box=2, filename="b.jpg", place=place, place_todo=True
+    )
+    missing_place = ImageFactory(box=box, sequence_in_box=3, filename="c.jpg")
+
+    response = auth_client.get(reverse("gallery") + "?filter=place-todo")
+
+    assert set(response.context["images"]) == {flagged, missing_place}
+
+
+@pytest.mark.django_db
+def test_gallery_filter_date_todo_includes_images_without_date(auth_client):
+    box = BoxFactory()
+    ImageFactory(
+        box=box,
+        sequence_in_box=1,
+        filename="a.jpg",
+        date_earliest=datetime.date(1980, 1, 1),
+        date_latest=datetime.date(1980, 12, 31),
+    )
+    flagged = ImageFactory(
+        box=box,
+        sequence_in_box=2,
+        filename="b.jpg",
+        date_earliest=datetime.date(1980, 1, 1),
+        date_latest=datetime.date(1980, 12, 31),
+        date_todo=True,
+    )
+    missing_date = ImageFactory(box=box, sequence_in_box=3, filename="c.jpg")
+
+    response = auth_client.get(reverse("gallery") + "?filter=date-todo")
+
+    assert set(response.context["images"]) == {flagged, missing_date}
 
 
 @pytest.mark.django_db
@@ -303,8 +344,8 @@ def test_gallery_renders_filter_and_sort_chips_with_active_marker(auth_client):
     response = auth_client.get(reverse("gallery") + "?filter=place-todo&sort=date-desc")
 
     content = response.content.decode()
-    assert 'href="?filter=all&amp;sort=date-desc"' in content
-    assert 'href="?filter=place-todo&amp;sort=date"' in content
+    assert 'href="?filter=all&amp;sort=date-desc&amp;place=all"' in content
+    assert 'href="?filter=place-todo&amp;sort=date&amp;place=all"' in content
     # Two active chips — one filter, one sort.
     assert content.count('class="gallery-chip active"') == 2
 
@@ -316,6 +357,145 @@ def test_gallery_navigation_link_present(auth_client):
     content = response.content.decode()
     assert reverse("gallery") in content
     assert ">Galerie<" in content
+
+
+@pytest.mark.django_db
+def test_gallery_place_filter_defaults_to_all(auth_client):
+    box = BoxFactory()
+    garden = PlaceFactory(name="Garten")
+    without = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+    with_place = ImageFactory(
+        box=box, sequence_in_box=2, filename="b.jpg", place=garden
+    )
+
+    response = auth_client.get(reverse("gallery"))
+
+    assert response.context["active_place"] == "all"
+    images = set(response.context["images"])
+    assert images == {without, with_place}
+
+
+@pytest.mark.django_db
+def test_gallery_place_filter_none_matches_images_without_place(auth_client):
+    box = BoxFactory()
+    garden = PlaceFactory(name="Garten")
+    without = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+    ImageFactory(box=box, sequence_in_box=2, filename="b.jpg", place=garden)
+
+    response = auth_client.get(reverse("gallery") + "?place=none")
+
+    assert response.context["active_place"] == "none"
+    assert list(response.context["images"]) == [without]
+
+
+@pytest.mark.django_db
+def test_gallery_place_filter_matches_specific_place(auth_client):
+    box = BoxFactory()
+    garden = PlaceFactory(name="Garten")
+    kitchen = PlaceFactory(name="Küche")
+    in_garden = ImageFactory(
+        box=box, sequence_in_box=1, filename="a.jpg", place=garden
+    )
+    ImageFactory(box=box, sequence_in_box=2, filename="b.jpg", place=kitchen)
+    ImageFactory(box=box, sequence_in_box=3, filename="c.jpg")
+
+    response = auth_client.get(reverse("gallery") + f"?place={garden.pk}")
+
+    assert response.context["active_place"] == garden.pk
+    assert list(response.context["images"]) == [in_garden]
+
+
+@pytest.mark.django_db
+def test_gallery_place_filter_unknown_pk_falls_back_to_all(auth_client):
+    box = BoxFactory()
+    image = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+
+    response = auth_client.get(reverse("gallery") + "?place=999999")
+
+    assert response.context["active_place"] == "all"
+    assert list(response.context["images"]) == [image]
+
+
+@pytest.mark.django_db
+def test_gallery_place_filter_garbage_value_falls_back_to_all(auth_client):
+    box = BoxFactory()
+    image = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+
+    response = auth_client.get(reverse("gallery") + "?place=bogus")
+
+    assert response.context["active_place"] == "all"
+    assert list(response.context["images"]) == [image]
+
+
+@pytest.mark.django_db
+def test_gallery_place_dropdown_only_lists_places_used_in_active_boxes(auth_client):
+    active_box = BoxFactory(name="Aktiv")
+    archived_box = BoxFactory(name="Archiv")
+    garden = PlaceFactory(name="Garten")
+    kitchen = PlaceFactory(name="Küche")
+    PlaceFactory(name="Ungebraucht")
+    ImageFactory(box=active_box, sequence_in_box=1, filename="a.jpg", place=garden)
+    ImageFactory(box=archived_box, sequence_in_box=1, filename="b.jpg", place=kitchen)
+    archived_box.archived = True
+    archived_box.save(user=auth_client.user)
+
+    response = auth_client.get(reverse("gallery"))
+
+    places = list(response.context["places"])
+    assert places == [garden]
+
+
+@pytest.mark.django_db
+def test_gallery_place_filter_combines_with_other_filters_and_sort(auth_client):
+    box = BoxFactory()
+    garden = PlaceFactory(name="Garten")
+    flagged_in_garden = ImageFactory(
+        box=box,
+        sequence_in_box=1,
+        filename="a.jpg",
+        place=garden,
+        place_todo=True,
+    )
+    ImageFactory(
+        box=box, sequence_in_box=2, filename="b.jpg", place=garden, place_todo=False
+    )
+    ImageFactory(box=box, sequence_in_box=3, filename="c.jpg", place_todo=True)
+
+    response = auth_client.get(
+        reverse("gallery") + f"?place={garden.pk}&filter=place-todo&sort=date-desc"
+    )
+
+    assert response.context["active_place"] == garden.pk
+    assert response.context["active_filter"] == "place-todo"
+    assert response.context["active_sort"] == "date-desc"
+    assert list(response.context["images"]) == [flagged_in_garden]
+
+
+@pytest.mark.django_db
+def test_gallery_place_dropdown_marks_selected_option(auth_client):
+    box = BoxFactory()
+    garden = PlaceFactory(name="Garten")
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=garden)
+
+    response = auth_client.get(reverse("gallery") + f"?place={garden.pk}")
+
+    content = response.content.decode()
+    assert f'value="{garden.pk}" selected' in content
+    assert "Alle Orte" in content
+    assert "Ohne Ort" in content
+
+
+@pytest.mark.django_db
+def test_gallery_chips_preserve_active_place(auth_client):
+    box = BoxFactory()
+    garden = PlaceFactory(name="Garten")
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=garden)
+
+    response = auth_client.get(reverse("gallery") + f"?place={garden.pk}")
+
+    content = response.content.decode()
+    assert f"place={garden.pk}" in content
+    assert f'href="?filter=all&amp;sort=date&amp;place={garden.pk}"' in content
 
 
 @pytest.mark.django_db

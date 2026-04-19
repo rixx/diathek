@@ -471,9 +471,12 @@ def _apply_grid_filter(qs, key):
             place__isnull=True, date_earliest__isnull=True, date_latest__isnull=True
         )
     if key == "place-todo":
-        return qs.filter(place_todo=True)
+        return qs.filter(Q(place_todo=True) | Q(place__isnull=True))
     if key == "date-todo":
-        return qs.filter(date_todo=True)
+        return qs.filter(
+            Q(date_todo=True)
+            | Q(date_earliest__isnull=True, date_latest__isnull=True)
+        )
     if key == "flip-todo":
         return qs.filter(needs_flip=True)
     if key == "edit-todo":
@@ -531,6 +534,33 @@ def _apply_gallery_sort(qs, key):
     return qs.order_by(F("date_earliest").asc(nulls_last=True), *box_tiebreak)
 
 
+def _gallery_places(base_qs):
+    place_ids = set(
+        base_qs.exclude(place__isnull=True).values_list("place_id", flat=True)
+    )
+    return list(Place.objects.filter(pk__in=place_ids).order_by("name"))
+
+
+def _resolve_gallery_place(raw, places):
+    if raw == "none":
+        return "none"
+    try:
+        pk = int(raw)
+    except (TypeError, ValueError):
+        return "all"
+    if any(place.pk == pk for place in places):
+        return pk
+    return "all"
+
+
+def _apply_gallery_place(qs, active_place):
+    if active_place == "none":
+        return qs.filter(place__isnull=True)
+    if isinstance(active_place, int):
+        return qs.filter(place_id=active_place)
+    return qs
+
+
 @login_required
 def gallery(request):
     raw_filter = request.GET.get("filter", "all")
@@ -539,7 +569,11 @@ def gallery(request):
     active_sort = raw_sort if raw_sort in GALLERY_SORT_KEYS else "date"
     base_qs = Image.objects.select_related("box", "place").filter(box__archived=False)
     total_count = base_qs.count()
-    filtered = _apply_gallery_filter(base_qs, active_filter)
+    places = _gallery_places(base_qs)
+    active_place = _resolve_gallery_place(request.GET.get("place", "all"), places)
+    filtered = _apply_gallery_place(
+        _apply_gallery_filter(base_qs, active_filter), active_place
+    )
     ordered = _apply_gallery_sort(filtered, active_sort)
     return render(
         request,
@@ -548,8 +582,10 @@ def gallery(request):
             "images": ordered,
             "filters": GALLERY_FILTERS,
             "sorts": GALLERY_SORTS,
+            "places": places,
             "active_filter": active_filter,
             "active_sort": active_sort,
+            "active_place": active_place,
             "total_count": total_count,
         },
     )

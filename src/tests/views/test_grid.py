@@ -90,28 +90,50 @@ def test_grid_filter_untagged_excludes_tagged_images(auth_client, box):
 
 @pytest.mark.django_db
 def test_grid_filter_place_todo(auth_client, box):
-    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
+    place = PlaceFactory()
+    resolved = ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", place=place)
     flagged = ImageFactory(
-        box=box, sequence_in_box=2, filename="b.jpg", place_todo=True
+        box=box, sequence_in_box=2, filename="b.jpg", place=place, place_todo=True
     )
+    missing_place = ImageFactory(box=box, sequence_in_box=3, filename="c.jpg")
 
     response = auth_client.get(
         reverse("box_grid", args=[box.uuid]) + "?filter=place-todo"
     )
 
-    assert list(response.context["images"]) == [flagged]
+    images = list(response.context["images"])
+    assert flagged in images
+    assert missing_place in images
+    assert resolved not in images
 
 
 @pytest.mark.django_db
 def test_grid_filter_date_todo(auth_client, box):
-    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg")
-    flagged = ImageFactory(box=box, sequence_in_box=2, filename="b.jpg", date_todo=True)
+    resolved = ImageFactory(
+        box=box,
+        sequence_in_box=1,
+        filename="a.jpg",
+        date_earliest=datetime.date(1970, 1, 1),
+        date_latest=datetime.date(1970, 1, 1),
+    )
+    flagged = ImageFactory(
+        box=box,
+        sequence_in_box=2,
+        filename="b.jpg",
+        date_earliest=datetime.date(1970, 1, 1),
+        date_latest=datetime.date(1970, 1, 1),
+        date_todo=True,
+    )
+    missing_date = ImageFactory(box=box, sequence_in_box=3, filename="c.jpg")
 
     response = auth_client.get(
         reverse("box_grid", args=[box.uuid]) + "?filter=date-todo"
     )
 
-    assert list(response.context["images"]) == [flagged]
+    images = list(response.context["images"])
+    assert flagged in images
+    assert missing_date in images
+    assert resolved not in images
 
 
 @pytest.mark.django_db

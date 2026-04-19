@@ -37,6 +37,14 @@
 }
 .gallery-chip:hover { background: #eee; }
 .gallery-chip.active { background: #036; color: #fff; border-color: #036; }
+.gallery-place-select {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #ccc;
+    background: #f6f6f6;
+    border-radius: 999px;
+}
 .gallery-count { font-size: 0.8rem; color: #666; margin-left: auto; }
 
 .gallery-tiles {
@@ -149,7 +157,7 @@
             <strong>Filter</strong>
             {% for key, label in filters %}
             <a class="gallery-chip{% if key == active_filter %} active{% endif %}"
-               href="?filter={{ key }}&amp;sort={{ active_sort }}"
+               href="?filter={{ key }}&amp;sort={{ active_sort }}&amp;place={{ active_place }}"
                role="tab"
                aria-selected="{% if key == active_filter %}true{% else %}false{% endif %}">{{ label }}</a>
             {% endfor %}
@@ -158,11 +166,25 @@
             <strong>Sortierung</strong>
             {% for key, label in sorts %}
             <a class="gallery-chip{% if key == active_sort %} active{% endif %}"
-               href="?filter={{ active_filter }}&amp;sort={{ key }}"
+               href="?filter={{ active_filter }}&amp;sort={{ key }}&amp;place={{ active_place }}"
                role="tab"
                aria-selected="{% if key == active_sort %}true{% else %}false{% endif %}">{{ label }}</a>
             {% endfor %}
         </div>
+        <form class="gallery-control-group" method="get" aria-label="Ort">
+            <strong><label for="gallery-place">Ort</label></strong>
+            <input type="hidden" name="filter" value="{{ active_filter }}">
+            <input type="hidden" name="sort" value="{{ active_sort }}">
+            <select id="gallery-place" class="gallery-place-select" name="place"
+                    onchange="this.form.submit()">
+                <option value="all"{% if active_place == 'all' %} selected{% endif %}>Alle Orte</option>
+                <option value="none"{% if active_place == 'none' %} selected{% endif %}>Ohne Ort</option>
+                {% for place in places %}
+                <option value="{{ place.pk }}"{% if active_place == place.pk %} selected{% endif %}>{{ place.name }}</option>
+                {% endfor %}
+            </select>
+            <noscript><button type="submit" class="gallery-chip">Anwenden</button></noscript>
+        </form>
         <span class="gallery-count">{{ images|length }} von {{ total_count }}</span>
     </nav>
 
