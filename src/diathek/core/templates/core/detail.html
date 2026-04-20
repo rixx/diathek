@@ -97,7 +97,7 @@ main:has(.detail-layout) {
      {% if prev_box_image %}data-prev-box-url="{% url 'image_detail' prev_box_image.box.uuid prev_box_image.pk %}"{% endif %}
      {% if next_box_image %}data-next-box-url="{% url 'image_detail' next_box_image.box.uuid next_box_image.pk %}"{% endif %}>
     <header class="detail-header">
-        <h1><a href="{% url 'index' %}">{{ box.name }}</a> · Bild {{ position }} von {{ total }}</h1>
+        <h1><a href="{% url 'box_grid' box.uuid %}">{{ box.name }}</a> · Bild {{ position }} von {{ total }}</h1>
         <div class="detail-status">
             <span class="detail-status-progress" data-progress-indicator></span>
             <span class="detail-status-driver" data-driver-indicator data-driver-state="none">niemand steuert</span>
