@@ -48,6 +48,9 @@
             {% if not box.archived and first_image %}
             <a href="{% url 'image_detail' box.uuid first_image.pk %}">Detailansicht</a>
             {% endif %}
+            {% if not box.archived and request.user.can_upload %}
+            <a href="{% url 'box_edit' box.uuid %}">Bearbeiten</a>
+            {% endif %}
             {% if not box.archived and request.user.is_staff %}
             <a href="{% url 'box_archive' box.uuid %}">Archivieren</a>
             {% endif %}

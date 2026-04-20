@@ -27,6 +27,14 @@ class CollectionForm(forms.ModelForm):
         self.fields["cover_image"].required = False
 
 
+class BoxForm(forms.ModelForm):
+    class Meta:
+        model = Box
+        fields = ("name", "description")
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+        labels = {"name": "Name", "description": "Beschreibung"}
+
+
 class BoxArchiveForm(forms.Form):
     confirm_name = forms.CharField(
         label="Box-Name zur Bestätigung",

@@ -17,6 +17,7 @@ from PIL import UnidentifiedImageError
 
 from diathek.core.forms import (
     BoxArchiveForm,
+    BoxForm,
     CollectionForm,
     ImportForm,
     RegistrationForm,
@@ -104,6 +105,11 @@ def _reject_filename_conflicts(target_box, filenames):
         )
 
 
+def _next_box_sort_order():
+    current_max = Box.objects.aggregate(Max("sort_order"))["sort_order__max"]
+    return (current_max or 0) + 1
+
+
 def _resolve_target_box(form, user):
     choice = form.cleaned_data["box_choice"]
     if choice == ImportForm.BOX_UNSORTED:
@@ -112,6 +118,7 @@ def _resolve_target_box(form, user):
         box = Box(
             name=form.cleaned_data["new_box_name"],
             description=form.cleaned_data.get("new_box_description") or "",
+            sort_order=_next_box_sort_order(),
         )
         box.save(user=user)
         return box
@@ -1054,6 +1061,31 @@ def collection_edit(request, pk=None):
     return render(
         request, "core/collection_edit.html", {"form": form, "collection": collection}
     )
+
+
+@login_required
+@_upload_required
+def box_edit(request, box_uuid=None):
+    box = None
+    if box_uuid is not None:
+        box = get_object_or_404(Box, uuid=box_uuid)
+        if box.archived:
+            messages.error(request, "Archivierte Boxen können nicht bearbeitet werden.")
+            return redirect("box_grid", box_uuid=box.uuid)
+
+    if request.method == "POST":
+        form = BoxForm(request.POST, instance=box)
+        if form.is_valid():
+            saved = form.save(commit=False)
+            if box is None:
+                saved.sort_order = _next_box_sort_order()
+            saved.save(user=request.user)
+            messages.success(request, "Box gespeichert.")
+            return redirect("box_grid", box_uuid=saved.uuid)
+    else:
+        form = BoxForm(instance=box)
+
+    return render(request, "core/box_edit.html", {"form": form, "box": box})
 
 
 @login_required

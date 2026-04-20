@@ -8,6 +8,7 @@
     <div class="page-header-actions">
         {% if request.user.can_upload %}
         <a class="btn btn-primary" href="{% url 'import' %}">Neue Bilder hochladen</a>
+        <a class="btn btn-secondary" href="{% url 'box_create' %}">Neue Box</a>
         {% endif %}
     </div>
 </header>
