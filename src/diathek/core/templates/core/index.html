@@ -6,7 +6,7 @@
 <header class="page-header">
     <h1>Boxen</h1>
     <div class="page-header-actions">
-        {% if request.user.is_staff %}
+        {% if request.user.can_upload %}
         <a class="btn btn-primary" href="{% url 'import' %}">Neue Bilder hochladen</a>
         {% endif %}
     </div>

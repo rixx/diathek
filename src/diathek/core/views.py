@@ -39,6 +39,10 @@ def _staff_required(view):
     return user_passes_test(lambda u: u.is_active and u.is_staff)(view)
 
 
+def _upload_required(view):
+    return user_passes_test(lambda u: u.is_active and u.can_upload)(view)
+
+
 def _superuser_required(view):
     return user_passes_test(lambda u: u.is_active and u.is_superuser)(view)
 
@@ -122,7 +126,7 @@ def _save_image_files(image, original_bytes, original_name, assets):
 
 
 @login_required
-@_staff_required
+@_upload_required
 def import_view(request):
     if request.method != "POST":
         return render(request, "core/import.html", {"form": ImportForm()})
@@ -216,7 +220,7 @@ class _ImportError(Exception):
 
 
 @login_required
-@_staff_required
+@_upload_required
 @require_POST
 def api_upload(request):
     files = request.FILES.getlist("files")

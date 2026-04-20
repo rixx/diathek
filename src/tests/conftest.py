@@ -5,7 +5,13 @@ from tests.factories import UserFactory
 
 @pytest.fixture
 def admin_user(db):
-    return UserFactory(username="admin", name="Admin", is_staff=True, is_superuser=True)
+    return UserFactory(
+        username="admin",
+        name="Admin",
+        is_staff=True,
+        is_superuser=True,
+        can_upload=True,
+    )
 
 
 @pytest.fixture(autouse=True, scope="session")

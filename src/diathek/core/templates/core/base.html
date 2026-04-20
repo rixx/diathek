@@ -17,8 +17,10 @@
             <span class="site-nav-logo" aria-hidden="true">?</span>
             <span>diathek</span>
         </a>
-        {% if user.is_staff %}
+        {% if user.can_upload %}
         <a href="{% url 'import' %}">Hochladen</a>
+        {% endif %}
+        {% if user.is_staff %}
         <a href="{% url 'unsorted' %}">Unsortiert</a>
         {% endif %}
         <a href="{% url 'gallery' %}">Galerie</a>

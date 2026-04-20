@@ -61,7 +61,15 @@ def test_create_superuser_sets_staff_and_superuser_flags():
 
     assert user.is_staff is True
     assert user.is_superuser is True
+    assert user.can_upload is True
     assert user.check_password("pw12345678")
+
+
+@pytest.mark.django_db
+def test_create_user_defaults_can_upload_to_false():
+    user = User.objects.create_user(username="km", password="pw12345678")
+
+    assert user.can_upload is False
 
 
 @pytest.mark.django_db

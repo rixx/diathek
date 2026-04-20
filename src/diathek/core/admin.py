@@ -24,7 +24,14 @@ class DiathekUserCreationForm(UserCreationForm):
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     add_form = DiathekUserCreationForm
-    list_display = ("username", "name", "is_staff", "is_active", "last_poll")
+    list_display = (
+        "username",
+        "name",
+        "is_staff",
+        "can_upload",
+        "is_active",
+        "last_poll",
+    )
     search_fields = ("username", "name")
     ordering = ("username",)
     fieldsets = (
@@ -37,6 +44,7 @@ class UserAdmin(DjangoUserAdmin):
                     "is_active",
                     "is_staff",
                     "is_superuser",
+                    "can_upload",
                     "groups",
                     "user_permissions",
                 )

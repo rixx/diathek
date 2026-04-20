@@ -56,6 +56,26 @@ def test_index_hides_upload_and_unsorted_for_non_staff(auth_client):
 
 
 @pytest.mark.django_db
+def test_index_shows_upload_button_for_can_upload_users(client):
+    user = UserFactory(is_staff=False, can_upload=True)
+    client.force_login(user)
+
+    response = client.get(reverse("index"))
+
+    content = response.content.decode("utf-8")
+    assert "Neue Bilder hochladen" in content
+    assert reverse("import") in content
+
+
+@pytest.mark.django_db
+def test_index_hides_upload_button_from_staff_without_can_upload(staff_client):
+    response = staff_client.get(reverse("index"))
+
+    content = response.content.decode("utf-8")
+    assert "Neue Bilder hochladen" not in content
+
+
+@pytest.mark.django_db
 def test_index_without_boxes_shows_empty_message(auth_client):
     response = auth_client.get(reverse("index"))
 

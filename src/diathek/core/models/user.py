@@ -21,6 +21,7 @@ class UserManager(BaseUserManager):
     def create_superuser(self, username, password, name=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("can_upload", True)
         return self.create_user(
             username=username, name=name, password=password, **extra_fields
         )
@@ -31,6 +32,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     name = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    can_upload = models.BooleanField(default=False)
     last_poll = models.DateTimeField(null=True, blank=True, db_index=True)
 
     USERNAME_FIELD = "username"

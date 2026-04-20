@@ -12,15 +12,15 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def auth_client(client):
-    user = UserFactory(is_staff=True)
+    user = UserFactory(is_staff=True, can_upload=True)
     client.force_login(user)
     client.user = user
     return client
 
 
 @pytest.fixture
-def non_staff_client(client):
-    user = UserFactory()
+def non_upload_client(client):
+    user = UserFactory(is_staff=True, can_upload=False)
     client.force_login(user)
     client.user = user
     return client
@@ -35,10 +35,20 @@ def test_import_get_requires_login(client):
 
 
 @pytest.mark.django_db
-def test_import_requires_staff(non_staff_client):
-    response = non_staff_client.get(reverse("import"))
+def test_import_requires_upload_permission(non_upload_client):
+    response = non_upload_client.get(reverse("import"))
 
     assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_import_allows_non_staff_with_can_upload(client):
+    user = UserFactory(is_staff=False, can_upload=True)
+    client.force_login(user)
+
+    response = client.get(reverse("import"))
+
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db

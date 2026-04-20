@@ -75,14 +75,22 @@
             {% endfor %}
         </ul>
         {% else %}
+        {% if request.user.can_upload %}
         <p>Noch keine Boxen. <a href="{% url 'import' %}">Beim Hochladen anlegen.</a></p>
+        {% else %}
+        <p>Noch keine Boxen.</p>
+        {% endif %}
         {% endif %}
     </aside>
 </div>
 <form id="assign-form" style="display:none">{% csrf_token %}</form>
 <p id="assign-status" role="status" aria-live="polite"></p>
 {% else %}
+{% if request.user.can_upload %}
 <p>Keine unsortierten Bilder. <a href="{% url 'import' %}">Neue hochladen.</a></p>
+{% else %}
+<p>Keine unsortierten Bilder.</p>
+{% endif %}
 {% endif %}
 {% endblock %}
 
