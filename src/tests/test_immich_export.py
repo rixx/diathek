@@ -54,6 +54,34 @@ def test_build_args_for_image_without_place_has_no_city_or_gps():
     assert not any(arg.startswith("-GPSLatitude=") for arg in args)
 
 
+def test_build_args_uses_image_coords_when_set():
+    image = ImageFactory(
+        place=None, latitude=Decimal("52.520007"), longitude=Decimal("13.404954")
+    )
+
+    args = build_args_for_image(image)
+
+    assert "-GPSLatitude=52.520007" in args
+    assert "-GPSLongitude=13.404954" in args
+    assert not any(arg.startswith("-IPTC:City=") for arg in args)
+
+
+def test_build_args_image_coords_override_place_coords():
+    place = PlaceFactory(
+        name="Hamburg", latitude=Decimal("53.55"), longitude=Decimal("9.99")
+    )
+    image = ImageFactory(
+        place=place, latitude=Decimal("52.520007"), longitude=Decimal("13.404954")
+    )
+
+    args = build_args_for_image(image)
+
+    # City name still comes from the place, but the pin is the image's own.
+    assert "-IPTC:City=Hamburg" in args
+    assert "-GPSLatitude=52.520007" in args
+    assert "-GPSLatitude=53.55" not in args
+
+
 def test_render_processed_image_happy_path(mocker):
     image = _stored_image()
     run = mocker.patch("diathek.core.immich_export.subprocess.run")

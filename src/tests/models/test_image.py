@@ -2,6 +2,7 @@ import datetime
 import hashlib
 import json
 import uuid
+from decimal import Decimal
 
 import pytest
 from django.core.files.base import ContentFile
@@ -67,6 +68,59 @@ def test_image_needs_flip_alone_is_not_an_open_todo():
     # needs_flip is a permanent "this image is mirrored" record baked into the
     # upload as an EXIF orientation flag; it no longer blocks archival.
     assert not ImageFactory.build(needs_flip=True).has_open_todos()
+
+
+@pytest.mark.django_db
+def test_image_has_coords_requires_both_values():
+    assert ImageFactory.build(
+        latitude=Decimal("52.5"), longitude=Decimal("13.4")
+    ).has_coords
+    assert not ImageFactory.build(latitude=Decimal("52.5"), longitude=None).has_coords
+    assert not ImageFactory.build(latitude=None, longitude=None).has_coords
+
+
+@pytest.mark.django_db
+def test_image_has_location_via_place_or_coords():
+    place = PlaceFactory()
+    assert ImageFactory.build(place=place).has_location
+    assert ImageFactory.build(
+        place=None, latitude=Decimal("52.5"), longitude=Decimal("13.4")
+    ).has_location
+    assert not ImageFactory.build(place=None).has_location
+
+
+@pytest.mark.django_db
+def test_compute_immich_signature_includes_coords_when_set():
+    image = ImageFactory.build()
+    before = image.compute_immich_signature()
+
+    image.latitude = Decimal("52.520007")
+    image.longitude = Decimal("13.404954")
+
+    assert image.compute_immich_signature() != before
+
+
+@pytest.mark.django_db
+def test_compute_immich_signature_unchanged_without_coords():
+    """Adding the feature must not silently invalidate coordless uploads."""
+    image = ImageFactory.build(place=None, date_earliest=None, date_latest=None)
+
+    expected = hashlib.sha256(
+        json.dumps(
+            {
+                "content_hash": image.content_hash,
+                "place": None,
+                "date": None,
+                "date_display": image.date_display,
+                "description": image.description,
+                "needs_flip": image.needs_flip,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    assert image.compute_immich_signature() == expected
 
 
 @pytest.mark.django_db

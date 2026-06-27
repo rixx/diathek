@@ -48,6 +48,9 @@ class ImmichClient:
     def verify(self):
         return self._request("GET", "/users/me")
 
+    def get_asset(self, asset_id):
+        return self._request("GET", f"/assets/{asset_id}")
+
     def bulk_check(self, items):
         assets = [{"id": item["id"], "checksum": item["checksum"]} for item in items]
         result = self._request(

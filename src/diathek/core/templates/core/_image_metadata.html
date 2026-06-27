@@ -33,6 +33,38 @@
         Ort unklar
     </label>
 
+    {% if request.user.has_immich_configured %}
+    <div class="field immich-field" data-immich-field>
+        <span>Aus Immich übernehmen</span>
+        <div class="immich-combo">
+            <input type="url"
+                   name="immich_link"
+                   autocomplete="off"
+                   placeholder="Immich-Foto-Link einfügen"
+                   data-immich-link>
+            <button type="button"
+                    class="immich-apply"
+                    hx-post="{% url 'image_apply_immich' image.pk %}"
+                    hx-headers='{"If-Match": "{{ image.version }}"}'
+                    hx-include="closest .immich-combo"
+                    hx-target="#image-form-{{ image.pk }}"
+                    hx-swap="outerHTML">Datum &amp; Ort holen</button>
+        </div>
+        {% if image.has_coords %}
+        <p class="immich-coords">
+            📍 {{ image.latitude }}, {{ image.longitude }}
+            <button type="button"
+                    class="immich-clear"
+                    hx-post="{% url 'image_apply_immich' image.pk %}"
+                    hx-headers='{"If-Match": "{{ image.version }}"}'
+                    hx-vals='{"clear": "true"}'
+                    hx-target="#image-form-{{ image.pk }}"
+                    hx-swap="outerHTML">entfernen</button>
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% include "core/_date_input.html" %}
 
     <label class="field checkbox">

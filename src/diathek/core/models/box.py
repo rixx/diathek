@@ -2,6 +2,7 @@ import uuid
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from diathek.core.models.base import BaseModel
@@ -55,17 +56,25 @@ class Box(BaseModel):
         todo_date = qs.filter(date_todo=True).count()
         todo_flip = qs.filter(needs_flip=True).count()
         todo_edit = qs.exclude(edit_todo="").count()
+        # A slide's location counts as known via a named place *or* direct
+        # coordinates (e.g. pulled from an Immich photo).
         tagged = qs.exclude(
-            place__isnull=True, date_earliest__isnull=True, date_latest__isnull=True
+            place__isnull=True,
+            latitude__isnull=True,
+            date_earliest__isnull=True,
+            date_latest__isnull=True,
         ).count()
-        done = qs.filter(
-            place_todo=False,
-            date_todo=False,
-            needs_flip=False,
-            edit_todo="",
-            place__isnull=False,
-            date_earliest__isnull=False,
-        ).count()
+        done = (
+            qs.filter(
+                place_todo=False,
+                date_todo=False,
+                needs_flip=False,
+                edit_todo="",
+                date_earliest__isnull=False,
+            )
+            .filter(Q(place__isnull=False) | Q(latitude__isnull=False))
+            .count()
+        )
         return {
             "total": total,
             "tagged": tagged,

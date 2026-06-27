@@ -74,6 +74,12 @@ class Image(BaseModel):
         blank=True,
         related_name="images",
     )
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
     place_todo = models.BooleanField(default=False)
     date_earliest = models.DateField(null=True, blank=True)
     date_latest = models.DateField(null=True, blank=True)
@@ -104,6 +110,8 @@ class Image(BaseModel):
         "box",
         "sequence_in_box",
         "place",
+        "latitude",
+        "longitude",
         "place_todo",
         "date_earliest",
         "date_latest",
@@ -135,6 +143,15 @@ class Image(BaseModel):
     def has_open_todos(self):
         return bool(self.place_todo or self.date_todo or self.edit_todo)
 
+    @property
+    def has_coords(self):
+        return self.latitude is not None and self.longitude is not None
+
+    @property
+    def has_location(self):
+        """True when a location is known via a named place or direct coordinates."""
+        return self.place_id is not None or self.has_coords
+
     def date_representative(self):
         if self.date_earliest is None or self.date_latest is None:
             return None
@@ -154,6 +171,9 @@ class Image(BaseModel):
             "description": self.description,
             "needs_flip": self.needs_flip,
         }
+        if self.has_coords:
+            payload["latitude"] = str(self.latitude)
+            payload["longitude"] = str(self.longitude)
         blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 

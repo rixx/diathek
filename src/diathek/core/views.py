@@ -34,6 +34,10 @@ from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
 from diathek.metadata.coords import parse_coordinates
 from diathek.metadata.description import stamp_description
+from diathek.metadata.immich_import import (
+    extract_immich_metadata,
+    parse_immich_asset_id,
+)
 
 POLL_THROTTLE_SECONDS = 30
 
@@ -487,10 +491,15 @@ GRID_FILTER_KEYS = {key for key, _ in GRID_FILTERS}
 def _apply_grid_filter(qs, key):
     if key == "untagged":
         return qs.filter(
-            place__isnull=True, date_earliest__isnull=True, date_latest__isnull=True
+            place__isnull=True,
+            latitude__isnull=True,
+            date_earliest__isnull=True,
+            date_latest__isnull=True,
         )
     if key == "place-todo":
-        return qs.filter(Q(place_todo=True) | Q(place__isnull=True))
+        return qs.filter(
+            Q(place_todo=True) | Q(place__isnull=True, latitude__isnull=True)
+        )
     if key == "date-todo":
         return qs.filter(
             Q(date_todo=True) | Q(date_earliest__isnull=True, date_latest__isnull=True)
@@ -504,7 +513,7 @@ def _apply_grid_filter(qs, key):
     if key == "any-todo":
         return qs.filter(
             Q(place_todo=True)
-            | Q(place__isnull=True)
+            | Q(place__isnull=True, latitude__isnull=True)
             | Q(date_todo=True)
             | Q(date_earliest__isnull=True, date_latest__isnull=True)
             | Q(needs_flip=True)
@@ -643,13 +652,9 @@ def box_grid(request, box_uuid):
 def image_save(request, image_id):
     data = _get_request_data(request)
 
-    expected_version_raw = request.headers.get("If-Match")
-    if expected_version_raw is None:
-        return HttpResponse("If-Match header fehlt.", status=428)
-    try:
-        expected_version = int(expected_version_raw)
-    except ValueError:
-        return HttpResponse("If-Match header ungültig.", status=428)
+    expected_version, version_error = _parse_if_match(request)
+    if version_error is not None:
+        return version_error
 
     try:
         updates = parse_metadata_payload(data)
@@ -684,30 +689,22 @@ def image_save(request, image_id):
                 today=timezone.localdate(),
             )
 
-        changed = _diff_updates(locked, updates)
-        if not changed:
-            return _render_fragment(request, locked)
+        return _commit_image_updates(request, locked, expected_version, updates)
 
-        before = locked._snapshot()
 
-        rowcount = Image.objects.filter(pk=image_id, version=expected_version).update(
-            **changed, version=F("version") + 1, updated_at=timezone.now()
-        )
-        if rowcount == 0:
-            locked.refresh_from_db()
-            return _render_fragment(request, locked, status=409, conflict=True)
+def _parse_if_match(request):
+    """Return ``(expected_version, None)`` or ``(None, error_response)``.
 
-        locked.refresh_from_db()
-        after = locked._snapshot()
-        changed_keys = [k for k in after if before.get(k) != after.get(k)]
-        locked.log_action(
-            "image.change",
-            user=request.user,
-            before={k: before[k] for k in changed_keys},
-            after={k: after[k] for k in changed_keys},
-        )
-
-    return _render_fragment(request, locked)
+    Drives optimistic-concurrency checks: every write to an image carries the
+    version it is editing in the ``If-Match`` header.
+    """
+    raw = request.headers.get("If-Match")
+    if raw is None:
+        return None, HttpResponse("If-Match header fehlt.", status=428)
+    try:
+        return int(raw), None
+    except ValueError:
+        return None, HttpResponse("If-Match header ungültig.", status=428)
 
 
 def _diff_updates(image, updates):
@@ -717,6 +714,38 @@ def _diff_updates(image, updates):
         if stored != value:
             changed[key] = value
     return changed
+
+
+def _commit_image_updates(request, locked, expected_version, updates):
+    """Persist ``updates`` to an already-locked image with version checking.
+
+    Returns the re-rendered metadata fragment: unchanged on a noop, a 409
+    conflict fragment when the optimistic version check fails, and the new
+    state plus an audit-log entry on success. Must be called inside the
+    transaction that holds the ``select_for_update`` lock on ``locked``.
+    """
+    changed = _diff_updates(locked, updates)
+    if not changed:
+        return _render_fragment(request, locked)
+
+    before = locked._snapshot()
+    rowcount = Image.objects.filter(pk=locked.pk, version=expected_version).update(
+        **changed, version=F("version") + 1, updated_at=timezone.now()
+    )
+    if rowcount == 0:
+        locked.refresh_from_db()
+        return _render_fragment(request, locked, status=409, conflict=True)
+
+    locked.refresh_from_db()
+    after = locked._snapshot()
+    changed_keys = [k for k in after if before.get(k) != after.get(k)]
+    locked.log_action(
+        "image.change",
+        user=request.user,
+        before={k: before[k] for k in changed_keys},
+        after={k: after[k] for k in changed_keys},
+    )
+    return _render_fragment(request, locked)
 
 
 @login_required
@@ -778,6 +807,97 @@ def image_batch(request):
 def image_fragment(request, image_id):
     image = get_object_or_404(Image.objects.select_related("box", "place"), pk=image_id)
     return _render_fragment(request, image)
+
+
+class _ImmichApplyError(Exception):
+    """User-facing error raised while pulling metadata from an Immich photo."""
+
+
+def _immich_updates(request, image):
+    """Build the field updates for an Immich-apply request.
+
+    A request carrying ``clear`` removes the slide's direct coordinates. Any
+    other request resolves the pasted ``immich_link`` to an asset, fetches it,
+    and lifts out the capture date and GPS coordinates. Pulling a date clears
+    the "Datum unklar" flag and pulling coordinates clears "Ort unklar", since
+    those values are now known. Raises :class:`_ImmichApplyError` with a German
+    message for any user-facing failure.
+    """
+    if request.POST.get("clear"):
+        if not image.has_coords:
+            return {}
+        return {"latitude": None, "longitude": None}
+
+    if not request.user.has_immich_configured:
+        raise _ImmichApplyError("Bitte zuerst einen Immich-API-Schlüssel hinterlegen.")
+    if not settings.IMMICH_BASE_URL:
+        raise _ImmichApplyError("Immich-Server ist nicht konfiguriert.")
+
+    asset_id = parse_immich_asset_id(request.POST.get("immich_link", ""))
+    if asset_id is None:
+        raise _ImmichApplyError("Kein gültiger Immich-Link erkannt.")
+
+    client = ImmichClient(settings.IMMICH_BASE_URL, request.user.immich_api_key)
+    try:
+        asset = client.get_asset(asset_id)
+    except ImmichError:
+        raise _ImmichApplyError(
+            "Immich-Foto konnte nicht geladen werden. Stimmt der Link?"
+        ) from None
+
+    meta = extract_immich_metadata(asset)
+    if meta.is_empty:
+        raise _ImmichApplyError(
+            "Im Immich-Foto sind weder Datum noch Standort hinterlegt."
+        )
+
+    updates = {}
+    if meta.date is not None:
+        try:
+            parsed = dateparse.parse(meta.date)
+        except dateparse.ParseError as err:
+            raise _ImmichApplyError(str(err)) from err
+        updates.update(
+            date_display=parsed.display,
+            date_earliest=parsed.earliest,
+            date_latest=parsed.latest,
+            date_precision=parsed.precision,
+            date_todo=False,
+        )
+    if meta.latitude is not None:
+        updates.update(
+            latitude=meta.latitude, longitude=meta.longitude, place_todo=False
+        )
+    return updates
+
+
+@login_required
+@require_POST
+def image_apply_immich(request, image_id):
+    expected_version, version_error = _parse_if_match(request)
+    if version_error is not None:
+        return version_error
+
+    image = get_object_or_404(Image.objects.select_related("box", "place"), pk=image_id)
+    if image.box and image.box.archived:
+        return HttpResponseForbidden("Box ist archiviert.")
+
+    try:
+        updates = _immich_updates(request, image)
+    except _ImmichApplyError as err:
+        return _render_fragment(request, image, status=400, error=str(err))
+
+    with transaction.atomic():
+        try:
+            locked = (
+                Image.objects.select_related("box", "place")
+                .select_for_update()
+                .get(pk=image_id)
+            )
+        except Image.DoesNotExist:
+            return HttpResponse("Bild nicht gefunden.", status=404)
+
+        return _commit_image_updates(request, locked, expected_version, updates)
 
 
 _PRECISION_LABELS = {

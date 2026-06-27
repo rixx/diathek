@@ -116,6 +116,31 @@ def test_grid_filter_place_todo(auth_client, box):
 
 
 @pytest.mark.django_db
+def test_grid_filter_coords_count_as_location(auth_client, box):
+    from decimal import Decimal
+
+    # Located only via direct coordinates: not untagged, not a place-todo.
+    located = ImageFactory(
+        box=box,
+        sequence_in_box=1,
+        filename="a.jpg",
+        place=None,
+        latitude=Decimal("52.5"),
+        longitude=Decimal("13.4"),
+    )
+
+    untagged = auth_client.get(
+        reverse("box_grid", args=[box.uuid]) + "?filter=untagged"
+    )
+    place_todo = auth_client.get(
+        reverse("box_grid", args=[box.uuid]) + "?filter=place-todo"
+    )
+
+    assert located not in list(untagged.context["images"])
+    assert located not in list(place_todo.context["images"])
+
+
+@pytest.mark.django_db
 def test_grid_filter_date_todo(auth_client, box):
     resolved = ImageFactory(
         box=box,

@@ -57,6 +57,30 @@ def test_box_progress_counts_each_todo_category():
 
 
 @pytest.mark.django_db
+def test_box_progress_counts_coords_as_location():
+    import datetime
+    from decimal import Decimal
+
+    box = BoxFactory()
+    # Located only via direct coordinates (no named place), with a date and no
+    # open todos: this should count as both tagged and done.
+    ImageFactory(
+        box=box,
+        sequence_in_box=1,
+        place=None,
+        latitude=Decimal("52.5"),
+        longitude=Decimal("13.4"),
+        date_earliest=datetime.date(1987, 6, 1),
+        date_latest=datetime.date(1987, 8, 31),
+    )
+
+    progress = box.progress
+
+    assert progress["tagged"] == 1
+    assert progress["done"] == 1
+
+
+@pytest.mark.django_db
 def test_box_can_archive_true_when_empty():
     box = BoxFactory()
 

@@ -44,6 +44,11 @@ urlpatterns = [
         name="image_fragment",
     ),
     path(
+        "api/image/<int:image_id>/immich/",
+        views.image_apply_immich,
+        name="image_apply_immich",
+    ),
+    path(
         "api/autocomplete/place/", views.place_autocomplete, name="place_autocomplete"
     ),
     path("api/autocomplete/date/", views.date_autocomplete, name="date_autocomplete"),

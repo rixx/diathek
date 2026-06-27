@@ -24,13 +24,19 @@ class ExiftoolError(Exception):
 
 def build_args_for_image(image):
     place = image.place
+    if image.has_coords:
+        latitude, longitude = image.latitude, image.longitude
+    elif place is not None:
+        latitude, longitude = place.latitude, place.longitude
+    else:
+        latitude, longitude = None, None
     return build_exiftool_args(
         date_representative=image.date_representative(),
         date_display=image.date_display,
         description=image.description,
         place_name=place.name if place else None,
-        latitude=place.latitude if place else None,
-        longitude=place.longitude if place else None,
+        latitude=latitude,
+        longitude=longitude,
         needs_flip=image.needs_flip,
     )
 

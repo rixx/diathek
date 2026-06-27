@@ -86,6 +86,18 @@ def test_error_message_includes_status_and_body(request_mock, client):
     assert excinfo.value.status == 500
 
 
+def test_get_asset_fetches_by_id_and_returns_payload(request_mock, client):
+    request_mock.return_value = json_response(
+        {"id": "asset-7", "exifInfo": {"dateTimeOriginal": "1990-01-01T00:00:00Z"}}
+    )
+
+    asset = client.get_asset("asset-7")
+
+    args, _ = request_mock.call_args
+    assert args == ("GET", "https://immich.example.com/api/assets/asset-7")
+    assert asset["exifInfo"]["dateTimeOriginal"] == "1990-01-01T00:00:00Z"
+
+
 def test_bulk_check_posts_assets_body_and_returns_results(request_mock, client):
     request_mock.return_value = json_response(
         {

@@ -36,7 +36,7 @@ Args:
                data-autocomplete-url="{% url 'place_autocomplete' %}">
         <ul class="place-suggestions" data-place-suggestions hidden></ul>
     </div>
-    {% if image.place and not image.place.has_coords %}
+    {% if image.place and not image.place.has_coords and not image.has_coords %}
     <p class="place-warning">⚠ Ort hat keine Koordinaten.</p>
     {% endif %}
 </div>
