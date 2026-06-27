@@ -30,8 +30,15 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "django_tasks_db",
     "diathek.core",
 ]
+
+TASKS = {
+    "default": {"BACKEND": "django_tasks_db.DatabaseBackend", "QUEUES": ["default"]}
+}
+
+IMMICH_BASE_URL = ""
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
