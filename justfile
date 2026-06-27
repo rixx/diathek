@@ -104,6 +104,18 @@ collectstatic:
 serve *args="--bind 0.0.0.0:8000 --workers 2":
     uv run gunicorn diathek.wsgi {{ args }}
 
+# Run the background task worker (run exactly one instance — sqlite)
+[group('operations')]
+[working-directory("src")]
+worker *args:
+    {{ python }} manage.py db_worker {{ args }}
+
+# Prune stored background-task results so the table doesn't grow unbounded
+[group('operations')]
+[working-directory("src")]
+prune-tasks *args:
+    {{ python }} manage.py prune_db_task_results {{ args }}
+
 # Export metadata for a box (or all boxes) to a JSON file
 [group('operations')]
 [working-directory("src")]
