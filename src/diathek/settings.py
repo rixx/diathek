@@ -38,7 +38,7 @@ TASKS = {
     "default": {"BACKEND": "django_tasks_db.DatabaseBackend", "QUEUES": ["default"]}
 }
 
-IMMICH_BASE_URL = ""
+IMMICH_BASE_URL = "https://photos.rixx.de"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

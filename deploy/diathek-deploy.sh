@@ -32,4 +32,7 @@ sudo -u "$DIATHEK_USER" uv run python src/manage.py collectstatic --noinput
 log "Restarting diathek service"
 systemctl restart diathek
 
+log "Restarting diathek-db-worker service"
+systemctl restart diathek-db-worker
+
 log "Deploy completed"
