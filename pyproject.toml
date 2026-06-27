@@ -13,6 +13,7 @@ dependencies = [
   "Django~=6.0.0",
   "gunicorn~=25.3.0",
   "pillow~=11.3.0",
+  "urllib3~=2.7.0",
   "whitenoise~=6.12.0",
 ]
 
