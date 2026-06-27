@@ -18,6 +18,7 @@ urlpatterns = [
     path("box/<uuid:box_uuid>/archiv/", views.box_archive, name="box_archive"),
     path("orte/", views.place_list, name="place_list"),
     path("orte/<int:pk>/", views.place_set_coords, name="place_set_coords"),
+    path("konto/", views.account_settings, name="account_settings"),
     path("deploy/", views.trigger_deploy, name="deploy"),
     path("healthz/", views.healthz, name="healthz"),
     path("api/batch/", views.image_batch, name="image_batch"),

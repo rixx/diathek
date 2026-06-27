@@ -32,6 +32,15 @@ class BoxArchiveForm(forms.Form):
         return value
 
 
+class ImmichKeyForm(forms.Form):
+    immich_api_key = forms.CharField(
+        label="Immich-API-Schlüssel",
+        required=False,
+        max_length=255,
+        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
+    )
+
+
 class RegistrationForm(forms.Form):
     password = forms.CharField(
         widget=forms.PasswordInput, label="Passwort", strip=False

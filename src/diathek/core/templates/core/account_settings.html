@@ -1,0 +1,53 @@
+{% extends "core/base.html" %}
+
+{% block title %}Konto · diathek{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Konto</h1>
+</header>
+
+<section class="account-section">
+    <h2>Immich-Verbindung</h2>
+
+    {% if immich_base_url %}
+    <p>Verbundener Server: <code>{{ immich_base_url }}</code></p>
+    {% else %}
+    <p class="account-hint">
+        Es ist noch kein Immich-Server konfiguriert. Dein Schlüssel kann
+        gespeichert, aber noch nicht überprüft werden.
+    </p>
+    {% endif %}
+
+    <p>
+        {% if has_immich_configured %}
+        Aktuell ist ein API-Schlüssel hinterlegt. Leer absenden, um ihn zu entfernen.
+        {% else %}
+        Es ist noch kein API-Schlüssel hinterlegt.
+        {% endif %}
+    </p>
+
+    <form method="post" class="form-grid">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+        {% for field in form %}
+        <div class="form-field{% if field.errors %} form-field--error{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {% if field.errors %}<p class="field-error">{{ field.errors|join:", " }}</p>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Speichern</button>
+        </div>
+    </form>
+
+    <p class="account-hint">
+        Einen API-Schlüssel erzeugst du in der Immich-Weboberfläche unter
+        Kontoeinstellungen → API-Schlüssel.
+    </p>
+</section>
+{% endblock %}

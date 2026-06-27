@@ -15,7 +15,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 from PIL import UnidentifiedImageError
 
-from diathek.core.forms import BoxArchiveForm, BoxForm, ImportForm, RegistrationForm
+from diathek.core.forms import (
+    BoxArchiveForm,
+    BoxForm,
+    ImmichKeyForm,
+    ImportForm,
+    RegistrationForm,
+)
+from diathek.core.immich import ImmichClient, ImmichError
 from diathek.core.metadata import (
     MetadataError,
     parse_batch_payload,
@@ -1094,6 +1101,59 @@ def trigger_deploy(request):
         request, "Deploy wurde angestoßen. Der Neustart erfolgt automatisch."
     )
     return redirect(request.META.get("HTTP_REFERER") or reverse("index"))
+
+
+@login_required
+def account_settings(request):
+    user = request.user
+
+    if request.method == "POST":
+        form = ImmichKeyForm(request.POST)
+        if form.is_valid():
+            key = form.cleaned_data["immich_api_key"].strip()
+            if not key:
+                user.immich_api_key = ""
+                user.save(update_fields=["immich_api_key"])
+                messages.success(request, "Immich-API-Schlüssel entfernt.")
+                return redirect("account_settings")
+
+            if not settings.IMMICH_BASE_URL:
+                user.immich_api_key = key
+                user.save(update_fields=["immich_api_key"])
+                messages.warning(
+                    request,
+                    "Schlüssel gespeichert, aber der Immich-Server ist noch nicht "
+                    "konfiguriert – der Schlüssel konnte nicht überprüft werden.",
+                )
+                return redirect("account_settings")
+
+            client = ImmichClient(settings.IMMICH_BASE_URL, key)
+            try:
+                account = client.verify()
+            except ImmichError:
+                messages.error(
+                    request,
+                    "Der Immich-API-Schlüssel wurde abgelehnt. Bitte überprüfe "
+                    "den Schlüssel und versuche es erneut.",
+                )
+            else:
+                user.immich_api_key = key
+                user.save(update_fields=["immich_api_key"])
+                label = account.get("email") or account.get("name") or "Immich"
+                messages.success(request, f"Mit Immich-Konto „{label}“ verbunden.")
+                return redirect("account_settings")
+    else:
+        form = ImmichKeyForm(initial={"immich_api_key": user.immich_api_key})
+
+    return render(
+        request,
+        "core/account_settings.html",
+        {
+            "form": form,
+            "immich_base_url": settings.IMMICH_BASE_URL,
+            "has_immich_configured": user.has_immich_configured,
+        },
+    )
 
 
 def healthz(request):

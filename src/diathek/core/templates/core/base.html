@@ -36,6 +36,8 @@
         <span class="site-nav-user">
             {{ user.name|default:user.username }}
             &middot;
+            <a href="{% url 'account_settings' %}">Konto</a>
+            &middot;
             <a href="{% url 'logout' %}">Abmelden</a>
         </span>
     </nav>
