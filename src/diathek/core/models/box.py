@@ -95,6 +95,10 @@ class Box(BaseModel):
             return False
         return not any(image.has_open_todos() for image in self.images.all())
 
+    @property
+    def archive_ready(self):
+        return self.can_archive and self.immich_complete
+
     def archive(self, user=None):
         from diathek.core.models.auditlog import AuditLog
         from diathek.core.models.image import Image

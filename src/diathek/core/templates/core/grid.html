@@ -73,6 +73,13 @@
     {% include "core/_immich_status.html" %}
     {% endif %}
 
+    {% if not box.archived and request.user.is_staff and box.archive_ready %}
+    <section class="archive-banner archive-banner--soft archive-ready-cta">
+        <p>Diese Box ist vollständig hochgeladen und kann jetzt archiviert werden.</p>
+        <a class="btn btn-primary" href="{% url 'box_archive' box.uuid %}">Jetzt archivieren</a>
+    </section>
+    {% endif %}
+
     {% if not box.archived %}
     {% csrf_token %}
     {% include "core/_batch_bar.html" %}

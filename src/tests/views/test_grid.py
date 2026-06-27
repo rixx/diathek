@@ -17,6 +17,14 @@ def auth_client(client):
 
 
 @pytest.fixture
+def staff_client(client):
+    user = UserFactory(name="Chef", is_staff=True)
+    client.force_login(user)
+    client.user = user
+    return client
+
+
+@pytest.fixture
 def box(db):
     return BoxFactory(name="Dachboden")
 
@@ -368,3 +376,41 @@ def test_index_exposes_grid_link_per_box(auth_client, box):
 
     content = response.content.decode()
     assert reverse("box_grid", args=[box.uuid]) in content
+
+
+@pytest.mark.django_db
+def test_grid_shows_archive_cta_for_staff_when_ready(staff_client, box):
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", immich_uploaded=True)
+
+    response = staff_client.get(reverse("box_grid", args=[box.uuid]))
+
+    content = response.content.decode()
+    assert "kann jetzt archiviert werden" in content
+    assert reverse("box_archive", args=[box.uuid]) in content
+
+
+@pytest.mark.django_db
+def test_grid_hides_archive_cta_when_not_ready(staff_client, box):
+    # uploaded but with an open todo → not archive_ready
+    ImageFactory(
+        box=box,
+        sequence_in_box=1,
+        filename="a.jpg",
+        immich_uploaded=True,
+        place_todo=True,
+    )
+
+    response = staff_client.get(reverse("box_grid", args=[box.uuid]))
+
+    content = response.content.decode()
+    assert "kann jetzt archiviert werden" not in content
+
+
+@pytest.mark.django_db
+def test_grid_hides_archive_cta_from_non_staff(auth_client, box):
+    ImageFactory(box=box, sequence_in_box=1, filename="a.jpg", immich_uploaded=True)
+
+    response = auth_client.get(reverse("box_grid", args=[box.uuid]))
+
+    content = response.content.decode()
+    assert "kann jetzt archiviert werden" not in content

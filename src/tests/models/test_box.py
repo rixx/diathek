@@ -147,6 +147,45 @@ def test_box_immich_complete_false_when_one_image_stale():
 
 
 @pytest.mark.django_db
+def test_box_archive_ready_true_when_can_archive_and_immich_complete():
+    box = BoxFactory()
+    ImageFactory(box=box, sequence_in_box=1, immich_uploaded=True)
+
+    assert box.can_archive is True
+    assert box.immich_complete is True
+    assert box.archive_ready is True
+
+
+@pytest.mark.django_db
+def test_box_archive_ready_false_when_archived():
+    box = BoxFactory(archived=True)
+    ImageFactory(box=box, sequence_in_box=1, immich_uploaded=True)
+
+    assert box.archive_ready is False
+
+
+@pytest.mark.django_db
+def test_box_archive_ready_false_when_open_todos():
+    box = BoxFactory()
+    ImageFactory(box=box, sequence_in_box=1, immich_uploaded=True)
+    ImageFactory(box=box, sequence_in_box=2, immich_uploaded=True, place_todo=True)
+
+    assert box.can_archive is False
+    assert box.immich_complete is True
+    assert box.archive_ready is False
+
+
+@pytest.mark.django_db
+def test_box_archive_ready_false_when_not_immich_complete():
+    box = BoxFactory()
+    ImageFactory(box=box, sequence_in_box=1)  # never uploaded to Immich
+
+    assert box.can_archive is True
+    assert box.immich_complete is False
+    assert box.archive_ready is False
+
+
+@pytest.mark.django_db
 def test_box_archive_sets_flags_and_removes_image_audit_logs():
     user = UserFactory()
     box = BoxFactory()

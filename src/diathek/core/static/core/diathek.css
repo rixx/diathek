@@ -565,6 +565,23 @@ h1, h2, h3 {
     color: var(--c-warn);
     vertical-align: middle;
 }
+.archive-ready-prompt h2 { margin: 0 0 var(--space-xs); font-size: 1.05rem; }
+.archive-ready-prompt p { margin: 0 0 var(--space-sm); }
+.archive-ready-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--space-xs);
+}
+.archive-ready-cta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+.archive-ready-cta p { margin: 0; }
 .open-todos {
     list-style: none;
     padding: 0;

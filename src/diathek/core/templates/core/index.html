@@ -19,6 +19,18 @@
 </p>
 {% endif %}
 
+{% if archive_ready_boxes %}
+<section class="archive-ready-prompt archive-banner archive-banner--soft">
+    <h2>Bereit zum Archivieren</h2>
+    <p>Diese Boxen sind vollständig zu Immich hochgeladen und können archiviert werden.</p>
+    <ul class="archive-ready-list">
+        {% for box in archive_ready_boxes %}
+        <li><a href="{% url 'box_archive' box.uuid %}">{{ box.name }}</a></li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 {% if boxes %}
 <ul class="box-list">
     {% for box in boxes %}

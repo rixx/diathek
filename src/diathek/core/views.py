@@ -86,6 +86,9 @@ def index(request):
         )
     archived_boxes = Box.objects.filter(archived=True).order_by("-archived_at", "name")
     unsorted_count = Image.objects.filter(box__isnull=True).count()
+    archive_ready_boxes = []
+    if request.user.is_staff:
+        archive_ready_boxes = [box for box in active_boxes if box.archive_ready]
     return render(
         request,
         "core/index.html",
@@ -93,6 +96,7 @@ def index(request):
             "boxes": active_boxes,
             "archived_boxes": archived_boxes,
             "unsorted_count": unsorted_count,
+            "archive_ready_boxes": archive_ready_boxes,
         },
     )
 

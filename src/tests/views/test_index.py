@@ -80,3 +80,45 @@ def test_index_without_boxes_shows_empty_message(auth_client):
     response = auth_client.get(reverse("index"))
 
     assert b"Noch keine Boxen" in response.content
+
+
+@pytest.mark.django_db
+def test_index_prompts_staff_to_archive_ready_boxes(staff_client):
+    ready = BoxFactory(name="Fertigbox")
+    ImageFactory(box=ready, sequence_in_box=1, immich_uploaded=True)
+    not_ready = BoxFactory(name="Offenbox")
+    ImageFactory(box=not_ready, sequence_in_box=1)  # not uploaded to Immich
+
+    response = staff_client.get(reverse("index"))
+
+    content = response.content.decode("utf-8")
+    assert list(response.context["archive_ready_boxes"]) == [ready]
+    assert "Bereit zum Archivieren" in content
+    assert reverse("box_archive", args=[ready.uuid]) in content
+    # boxes that are not ready are not offered for archival
+    assert reverse("box_archive", args=[not_ready.uuid]) not in content
+
+
+@pytest.mark.django_db
+def test_index_hides_archive_prompt_from_non_staff(auth_client):
+    ready = BoxFactory(name="Fertigbox")
+    ImageFactory(box=ready, sequence_in_box=1, immich_uploaded=True)
+
+    response = auth_client.get(reverse("index"))
+
+    content = response.content.decode("utf-8")
+    assert list(response.context["archive_ready_boxes"]) == []
+    assert "Bereit zum Archivieren" not in content
+    assert reverse("box_archive", args=[ready.uuid]) not in content
+
+
+@pytest.mark.django_db
+def test_index_omits_archive_prompt_when_no_box_ready(staff_client):
+    box = BoxFactory(name="Offenbox")
+    ImageFactory(box=box, sequence_in_box=1)  # not uploaded to Immich
+
+    response = staff_client.get(reverse("index"))
+
+    content = response.content.decode("utf-8")
+    assert list(response.context["archive_ready_boxes"]) == []
+    assert "Bereit zum Archivieren" not in content
