@@ -58,29 +58,6 @@
 <p class="empty-state">Noch keine Boxen angelegt.</p>
 {% endif %}
 
-{% if collections %}
-<section class="home-collections">
-    <header class="section-header">
-        <h2>Sammlungen</h2>
-        <a href="{% url 'collection_list' %}">Alle Sammlungen</a>
-    </header>
-    <ul class="collection-strip">
-        {% for collection in collections %}
-        <li class="collection-strip-item">
-            <a href="{% url 'collection_detail' collection.pk %}">
-                {% if collection.cover_image and collection.cover_image.thumb_small %}
-                <img src="{{ collection.cover_image.thumb_small.url }}" alt="">
-                {% else %}
-                <span class="collection-strip-placeholder" aria-hidden="true">?</span>
-                {% endif %}
-                <span class="collection-strip-title">{{ collection.title }}</span>
-            </a>
-        </li>
-        {% endfor %}
-    </ul>
-</section>
-{% endif %}
-
 {% if archived_boxes %}
 <section class="home-archived">
     <header class="section-header">

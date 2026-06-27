@@ -1,7 +1,6 @@
 from diathek.core.models.auditlog import AuditLog
 from diathek.core.models.base import BaseModel
 from diathek.core.models.box import Box
-from diathek.core.models.collection import Collection
 from diathek.core.models.driver import DriverState
 from diathek.core.models.image import DatePrecision, Image
 from diathek.core.models.invite import InviteCode
@@ -12,7 +11,6 @@ __all__ = [
     "AuditLog",
     "BaseModel",
     "Box",
-    "Collection",
     "DatePrecision",
     "DriverState",
     "Image",

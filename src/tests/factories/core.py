@@ -1,14 +1,6 @@
 import factory
 
-from diathek.core.models import (
-    Box,
-    Collection,
-    DriverState,
-    Image,
-    InviteCode,
-    Place,
-    User,
-)
+from diathek.core.models import Box, DriverState, Image, InviteCode, Place, User
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -56,13 +48,6 @@ class ImageFactory(factory.django.DjangoModelFactory):
     box = factory.SubFactory(BoxFactory)
     filename = factory.Sequence(lambda n: f"scan_{n:04d}.jpg")
     sequence_in_box = factory.Sequence(lambda n: n + 1)
-
-
-class CollectionFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = Collection
-
-    title = factory.Sequence(lambda n: f"Collection {n}")
 
 
 class DriverStateFactory(factory.django.DjangoModelFactory):

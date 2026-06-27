@@ -6,7 +6,6 @@ from django.utils.html import format_html
 from diathek.core.models import (
     AuditLog,
     Box,
-    Collection,
     DriverState,
     Image,
     InviteCode,
@@ -129,13 +128,6 @@ class ImageAdmin(admin.ModelAdmin):
 class PlaceAdmin(admin.ModelAdmin):
     list_display = ("name", "latitude", "longitude")
     search_fields = ("name",)
-
-
-@admin.register(Collection)
-class CollectionAdmin(admin.ModelAdmin):
-    list_display = ("title", "immich_url", "created_at")
-    search_fields = ("title", "description")
-    filter_horizontal = ("boxes",)
 
 
 @admin.register(DriverState)

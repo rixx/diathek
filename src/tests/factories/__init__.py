@@ -1,6 +1,5 @@
 from tests.factories.core import (
     BoxFactory,
-    CollectionFactory,
     DriverStateFactory,
     ImageFactory,
     InviteCodeFactory,
@@ -10,7 +9,6 @@ from tests.factories.core import (
 
 __all__ = [
     "BoxFactory",
-    "CollectionFactory",
     "DriverStateFactory",
     "ImageFactory",
     "InviteCodeFactory",

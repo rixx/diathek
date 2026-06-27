@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
 
-from tests.factories import BoxFactory, CollectionFactory, ImageFactory, UserFactory
+from tests.factories import BoxFactory, ImageFactory, UserFactory
 
 pytestmark = pytest.mark.integration
 
@@ -80,14 +80,3 @@ def test_index_without_boxes_shows_empty_message(auth_client):
     response = auth_client.get(reverse("index"))
 
     assert b"Noch keine Boxen" in response.content
-
-
-@pytest.mark.django_db
-def test_index_shows_recent_collections(auth_client):
-    CollectionFactory(title="Sommer 87")
-
-    response = auth_client.get(reverse("index"))
-
-    content = response.content.decode()
-    assert "Sommer 87" in content
-    assert reverse("collection_list") in content

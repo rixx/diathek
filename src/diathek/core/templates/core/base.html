@@ -25,7 +25,6 @@
         {% endif %}
         <a href="{% url 'gallery' %}">Galerie</a>
         <a href="{% url 'place_list' %}">Orte</a>
-        <a href="{% url 'collection_list' %}">Sammlungen</a>
         {% if user.is_superuser and deploy_enabled %}
         <form method="post" action="{% url 'deploy' %}" class="inline-form site-nav-deploy"
               hx-post="{% url 'deploy' %}" hx-swap="outerHTML"

@@ -15,19 +15,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 from PIL import UnidentifiedImageError
 
-from diathek.core.forms import (
-    BoxArchiveForm,
-    BoxForm,
-    CollectionForm,
-    ImportForm,
-    RegistrationForm,
-)
+from diathek.core.forms import BoxArchiveForm, BoxForm, ImportForm, RegistrationForm
 from diathek.core.metadata import (
     MetadataError,
     parse_batch_payload,
     parse_metadata_payload,
 )
-from diathek.core.models import Box, Collection, DriverState, Image, InviteCode, Place
+from diathek.core.models import Box, DriverState, Image, InviteCode, Place
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
 from diathek.metadata.coords import parse_coordinates
@@ -79,7 +73,6 @@ def index(request):
             box.images.order_by("sequence_in_box")[:INDEX_PREVIEW_THUMBS]
         )
     archived_boxes = Box.objects.filter(archived=True).order_by("-archived_at", "name")
-    collections = Collection.objects.order_by("-updated_at")[:6]
     unsorted_count = Image.objects.filter(box__isnull=True).count()
     return render(
         request,
@@ -87,7 +80,6 @@ def index(request):
         {
             "boxes": active_boxes,
             "archived_boxes": archived_boxes,
-            "collections": collections,
             "unsorted_count": unsorted_count,
         },
     )
@@ -623,7 +615,6 @@ def box_grid(request, box_uuid):
             "filters": GRID_FILTERS,
             "active_filter": active_filter,
             "total_count": box.images.count(),
-            "collections": list(box.collections.order_by("-updated_at")),
             "tile_clickable": not box.archived,
             "recent_places": list(Place.objects.recent()),
             "recent_dates": Image.recent_date_displays(),
@@ -1018,49 +1009,6 @@ def place_set_coords(request, pk):
                 place.save(user=request.user)
     place.image_count = place.images.count()
     return render(request, "core/_place_row.html", {"place": place, "error": error})
-
-
-@login_required
-def collection_list(request):
-    collections = Collection.objects.order_by("-updated_at")
-    return render(request, "core/collection_list.html", {"collections": collections})
-
-
-@login_required
-def collection_detail(request, pk):
-    collection = get_object_or_404(
-        Collection.objects.select_related("cover_image"), pk=pk
-    )
-    boxes = collection.boxes.order_by("sort_order", "name")
-    return render(
-        request,
-        "core/collection_detail.html",
-        {"collection": collection, "boxes": boxes},
-    )
-
-
-@login_required
-@_staff_required
-def collection_edit(request, pk=None):
-    collection = get_object_or_404(Collection, pk=pk) if pk is not None else None
-    if request.method == "POST":
-        form = CollectionForm(request.POST, instance=collection)
-        if form.is_valid():
-            if collection is None:
-                saved = form.save(commit=False)
-                saved.save(user=request.user)
-                form.save_m2m()
-            else:
-                saved = form.save(commit=False)
-                saved.save(user=request.user)
-                form.save_m2m()
-            messages.success(request, "Sammlung gespeichert.")
-            return redirect("collection_detail", pk=saved.pk)
-    else:
-        form = CollectionForm(instance=collection)
-    return render(
-        request, "core/collection_edit.html", {"form": form, "collection": collection}
-    )
 
 
 @login_required

@@ -113,25 +113,11 @@ def test_archive_post_with_blocker_surfaces_error(staff_client):
 
 
 @pytest.mark.django_db
-def test_grid_for_archived_box_shows_collection_link(staff_client):
-    from tests.factories import CollectionFactory
-
+def test_grid_for_archived_box_shows_immich_placeholder(staff_client):
     box = BoxFactory(archived=True)
-    collection = CollectionFactory(title="Omi", immich_url="https://immich/z")
-    collection.boxes.add(box)
 
     response = staff_client.get(reverse("box_grid", args=[box.uuid]))
 
     content = response.content.decode()
     assert "archiviert" in content
-    assert "Omi" in content
-    assert "https://immich/z" in content
-
-
-@pytest.mark.django_db
-def test_grid_for_archived_box_without_collection_shows_placeholder(staff_client):
-    box = BoxFactory(archived=True)
-
-    response = staff_client.get(reverse("box_grid", args=[box.uuid]))
-
-    assert b"Sammlung noch nicht bereit" in response.content
+    assert "Noch nicht zu Immich hochgeladen." in content

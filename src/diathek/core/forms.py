@@ -1,30 +1,7 @@
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 
-from diathek.core.models import Box, Collection, User
-
-
-class CollectionForm(forms.ModelForm):
-    class Meta:
-        model = Collection
-        fields = ("title", "immich_url", "description", "cover_image", "boxes")
-        widgets = {
-            "description": forms.Textarea(attrs={"rows": 4}),
-            "boxes": forms.CheckboxSelectMultiple(),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["boxes"].queryset = Box.objects.order_by("sort_order", "name")
-        self.fields["boxes"].required = False
-        instance = self.instance if self.instance.pk else None
-        cover_qs = self.fields["cover_image"].queryset
-        if instance is not None:
-            cover_qs = cover_qs.filter(box__in=instance.boxes.all())
-        else:
-            cover_qs = cover_qs.none()
-        self.fields["cover_image"].queryset = cover_qs
-        self.fields["cover_image"].required = False
+from diathek.core.models import Box, User
 
 
 class BoxForm(forms.ModelForm):

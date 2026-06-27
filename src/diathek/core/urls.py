@@ -18,12 +18,6 @@ urlpatterns = [
     path("box/<uuid:box_uuid>/archiv/", views.box_archive, name="box_archive"),
     path("orte/", views.place_list, name="place_list"),
     path("orte/<int:pk>/", views.place_set_coords, name="place_set_coords"),
-    path("sammlungen/", views.collection_list, name="collection_list"),
-    path("sammlung/neu/", views.collection_edit, name="collection_create"),
-    path("sammlung/<int:pk>/", views.collection_detail, name="collection_detail"),
-    path(
-        "sammlung/<int:pk>/bearbeiten/", views.collection_edit, name="collection_edit"
-    ),
     path("deploy/", views.trigger_deploy, name="deploy"),
     path("healthz/", views.healthz, name="healthz"),
     path("api/batch/", views.image_batch, name="image_batch"),
