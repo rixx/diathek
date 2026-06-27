@@ -1,4 +1,6 @@
 import datetime
+import hashlib
+import json
 import uuid
 
 import pytest
@@ -11,7 +13,7 @@ from diathek.core.models.image import (
     image_thumb_detail_upload_to,
     image_thumb_small_upload_to,
 )
-from tests.factories import BoxFactory, ImageFactory
+from tests.factories import BoxFactory, ImageFactory, PlaceFactory
 
 pytestmark = pytest.mark.unit
 
@@ -33,13 +35,19 @@ def test_image_save_bumps_version_each_time():
 def test_image_has_open_todos_true_for_each_todo_flag():
     assert ImageFactory.build(place_todo=True).has_open_todos()
     assert ImageFactory.build(date_todo=True).has_open_todos()
-    assert ImageFactory.build(needs_flip=True).has_open_todos()
     assert ImageFactory.build(edit_todo="fix").has_open_todos()
 
 
 @pytest.mark.django_db
 def test_image_has_open_todos_false_when_clean():
     assert not ImageFactory.build().has_open_todos()
+
+
+@pytest.mark.django_db
+def test_image_needs_flip_alone_is_not_an_open_todo():
+    # needs_flip is a permanent "this image is mirrored" record baked into the
+    # upload as an EXIF orientation flag; it no longer blocks archival.
+    assert not ImageFactory.build(needs_flip=True).has_open_todos()
 
 
 @pytest.mark.django_db
@@ -63,6 +71,83 @@ def test_image_date_representative_returns_none_when_any_bound_missing():
         ).date_representative()
         is None
     )
+
+
+@pytest.mark.django_db
+def test_compute_immich_signature_is_deterministic():
+    place = PlaceFactory()
+    kwargs = {
+        "content_hash": "abc123",
+        "place": place,
+        "date_earliest": datetime.date(1987, 6, 1),
+        "date_latest": datetime.date(1987, 8, 31),
+        "date_display": "Sommer 1987",
+        "description": "Oma im Garten",
+        "needs_flip": True,
+    }
+    first = ImageFactory.build(**kwargs)
+    second = ImageFactory.build(**kwargs)
+
+    assert first.compute_immich_signature() == second.compute_immich_signature()
+
+
+@pytest.mark.django_db
+def test_compute_immich_signature_uses_none_when_unset():
+    image = ImageFactory.build(place=None, date_earliest=None, date_latest=None)
+
+    expected = hashlib.sha256(
+        json.dumps(
+            {
+                "content_hash": image.content_hash,
+                "place": None,
+                "date": None,
+                "date_display": image.date_display,
+                "description": image.description,
+                "needs_flip": image.needs_flip,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    assert image.compute_immich_signature() == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("field", "value"), (("description", "geändert"), ("needs_flip", True))
+)
+def test_compute_immich_signature_changes_when_relevant_field_changes(field, value):
+    image = ImageFactory.build(description="original", needs_flip=False)
+    before = image.compute_immich_signature()
+
+    setattr(image, field, value)
+
+    assert image.compute_immich_signature() != before
+
+
+@pytest.mark.django_db
+def test_immich_is_current_false_without_asset_id():
+    image = ImageFactory()
+    image.immich_signature = image.compute_immich_signature()
+
+    assert image.immich_is_current is False
+
+
+@pytest.mark.django_db
+def test_immich_is_current_false_when_signature_differs():
+    image = ImageFactory(immich_asset_id="asset-1")
+    image.immich_signature = "stale"
+
+    assert image.immich_is_current is False
+
+
+@pytest.mark.django_db
+def test_immich_is_current_true_when_asset_and_signature_match():
+    image = ImageFactory(immich_asset_id="asset-1")
+    image.immich_signature = image.compute_immich_signature()
+
+    assert image.immich_is_current is True
 
 
 @pytest.mark.django_db

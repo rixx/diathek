@@ -7,6 +7,13 @@ from django.utils import timezone
 from diathek.core.models.base import BaseModel
 
 
+class ImmichState(models.TextChoices):
+    NOT_UPLOADED = "not_uploaded", "Nicht hochgeladen"
+    IN_PROGRESS = "in_progress", "Wird hochgeladen"
+    UPLOADED = "uploaded", "Hochgeladen"
+    FAILED = "failed", "Fehlgeschlagen"
+
+
 class Box(BaseModel):
     name = models.CharField(max_length=200)
     uuid = models.UUIDField(
@@ -16,6 +23,11 @@ class Box(BaseModel):
     sort_order = models.IntegerField(default=0)
     archived = models.BooleanField(default=False)
     archived_at = models.DateTimeField(null=True, blank=True)
+    immich_state = models.CharField(
+        max_length=16, choices=ImmichState.choices, default=ImmichState.NOT_UPLOADED
+    )
+    immich_album_url = models.URLField(blank=True)
+    immich_error = models.TextField(blank=True)
 
     log_action_prefix = "box"
     log_tracked_fields = (
@@ -63,6 +75,19 @@ class Box(BaseModel):
             "todo_edit": todo_edit,
             "done": done,
         }
+
+    @property
+    def immich_total(self):
+        return self.images.count()
+
+    @property
+    def immich_uploaded_count(self):
+        return self.images.exclude(immich_asset_id="").count()
+
+    @property
+    def immich_complete(self):
+        images = list(self.images.all())
+        return bool(images) and all(img.immich_is_current for img in images)
 
     @property
     def can_archive(self):

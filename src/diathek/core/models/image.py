@@ -86,6 +86,18 @@ class Image(BaseModel):
     edit_todo = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
 
+    immich_asset_id = models.CharField(max_length=64, blank=True)
+    immich_checksum = models.CharField(max_length=64, blank=True)
+    immich_uploaded_at = models.DateTimeField(null=True, blank=True)
+    immich_owner = models.ForeignKey(
+        "core.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="immich_uploads",
+    )
+    immich_signature = models.CharField(max_length=64, blank=True)
+
     log_action_prefix = "image"
     log_tracked_fields = (
         "filename",
@@ -121,15 +133,35 @@ class Image(BaseModel):
         return self.box_id
 
     def has_open_todos(self):
-        return bool(
-            self.place_todo or self.date_todo or self.needs_flip or self.edit_todo
-        )
+        return bool(self.place_todo or self.date_todo or self.edit_todo)
 
     def date_representative(self):
         if self.date_earliest is None or self.date_latest is None:
             return None
         span = (self.date_latest - self.date_earliest).days
         return self.date_earliest + timedelta(days=span // 2)
+
+    def compute_immich_signature(self):
+        import hashlib
+        import json
+
+        rep = self.date_representative()
+        payload = {
+            "content_hash": self.content_hash,
+            "place": self.place.name if self.place_id else None,
+            "date": rep.isoformat() if rep else None,
+            "date_display": self.date_display,
+            "description": self.description,
+            "needs_flip": self.needs_flip,
+        }
+        blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+    @property
+    def immich_is_current(self):
+        return bool(self.immich_asset_id) and (
+            self.immich_signature == self.compute_immich_signature()
+        )
 
     def save(self, *args, bump_version=True, **kwargs):
         if bump_version:

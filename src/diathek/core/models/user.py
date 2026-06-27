@@ -34,6 +34,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     can_upload = models.BooleanField(default=False)
     last_poll = models.DateTimeField(null=True, blank=True, db_index=True)
+    immich_api_key = models.CharField(max_length=255, blank=True)
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["name"]
@@ -48,3 +49,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self):
         return self.name
+
+    @property
+    def has_immich_configured(self):
+        return bool(self.immich_api_key)

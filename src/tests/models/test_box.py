@@ -1,7 +1,7 @@
 import pytest
 from django.contrib.contenttypes.models import ContentType
 
-from diathek.core.models import AuditLog, Image
+from diathek.core.models import AuditLog, Image, ImmichState
 from tests.factories import BoxFactory, ImageFactory, UserFactory
 
 pytestmark = pytest.mark.unit
@@ -77,6 +77,73 @@ def test_box_can_archive_false_when_already_archived():
     box = BoxFactory(archived=True)
 
     assert box.can_archive is False
+
+
+@pytest.mark.django_db
+def test_box_can_archive_true_with_only_needs_flip_image():
+    # needs_flip is a permanent mirror record, not an open todo, so it must not
+    # block archival.
+    box = BoxFactory()
+    ImageFactory(box=box, sequence_in_box=1, needs_flip=True)
+
+    assert box.can_archive is True
+
+    box.archive()
+
+    assert box.archived is True
+
+
+@pytest.mark.django_db
+def test_box_immich_state_defaults_to_not_uploaded():
+    box = BoxFactory()
+
+    assert box.immich_state == ImmichState.NOT_UPLOADED
+
+
+@pytest.mark.django_db
+def test_box_immich_total_counts_all_images():
+    box = BoxFactory()
+    ImageFactory(box=box, sequence_in_box=1)
+    ImageFactory(box=box, sequence_in_box=2)
+
+    assert box.immich_total == 2
+
+
+@pytest.mark.django_db
+def test_box_immich_uploaded_count_only_counts_uploaded():
+    box = BoxFactory()
+    ImageFactory(box=box, sequence_in_box=1, immich_asset_id="asset-1")
+    ImageFactory(box=box, sequence_in_box=2)
+
+    assert box.immich_uploaded_count == 1
+
+
+@pytest.mark.django_db
+def test_box_immich_complete_false_for_empty_box():
+    box = BoxFactory()
+
+    assert box.immich_complete is False
+
+
+@pytest.mark.django_db
+def test_box_immich_complete_true_when_all_images_current():
+    box = BoxFactory()
+    image = ImageFactory(box=box, sequence_in_box=1, immich_asset_id="asset-1")
+    image.immich_signature = image.compute_immich_signature()
+    image.save()
+
+    assert box.immich_complete is True
+
+
+@pytest.mark.django_db
+def test_box_immich_complete_false_when_one_image_stale():
+    box = BoxFactory()
+    current = ImageFactory(box=box, sequence_in_box=1, immich_asset_id="asset-1")
+    current.immich_signature = current.compute_immich_signature()
+    current.save()
+    ImageFactory(box=box, sequence_in_box=2)  # never uploaded
+
+    assert box.immich_complete is False
 
 
 @pytest.mark.django_db

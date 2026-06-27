@@ -77,3 +77,19 @@ def test_user_last_poll_defaults_to_null():
     user = User.objects.create_user(username="km", password="pw12345678")
 
     assert user.last_poll is None
+
+
+@pytest.mark.django_db
+def test_user_has_immich_configured_false_without_key():
+    user = User.objects.create_user(username="km", password="pw12345678")
+
+    assert user.has_immich_configured is False
+
+
+@pytest.mark.django_db
+def test_user_has_immich_configured_true_with_key():
+    user = User.objects.create_user(
+        username="km", password="pw12345678", immich_api_key="secret-key"
+    )
+
+    assert user.has_immich_configured is True
