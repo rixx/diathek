@@ -1,0 +1,48 @@
+<section id="immich-status-{{ box.pk }}" class="immich-status immich-status--{{ box.immich_state }}">
+    {% if immich_message %}
+    <p class="immich-status-message">{{ immich_message }}</p>
+    {% endif %}
+
+    {% if box.immich_state == "not_uploaded" %}
+    {% if request.user.has_immich_configured %}
+    <button type="button"
+            class="btn btn-secondary"
+            hx-post="{% url 'box_immich_finalize' box.uuid %}"
+            hx-target="#immich-status-{{ box.pk }}"
+            hx-swap="outerHTML">
+        Zu Immich hochladen
+    </button>
+    {% else %}
+    <p class="immich-status-hint">
+        Bitte zuerst einen <a href="{% url 'account_settings' %}">Immich-API-Schlüssel</a> hinterlegen.
+    </p>
+    {% endif %}
+
+    {% elif box.immich_state == "in_progress" %}
+    <p class="immich-status-progress"
+       hx-get="{% url 'box_immich_status' box.uuid %}"
+       hx-trigger="every 2s"
+       hx-target="#immich-status-{{ box.pk }}"
+       hx-swap="outerHTML">
+        Wird zu Immich hochgeladen … {{ box.immich_uploaded_count }} / {{ box.immich_total }}
+    </p>
+
+    {% elif box.immich_state == "uploaded" %}
+    <p class="immich-status-done">
+        Zu Immich hochgeladen.
+        {% if box.immich_album_url %}
+        <a href="{{ box.immich_album_url }}">In Immich öffnen</a>
+        {% endif %}
+    </p>
+
+    {% elif box.immich_state == "failed" %}
+    <p class="immich-status-error">Upload fehlgeschlagen: {{ box.immich_error }}</p>
+    <button type="button"
+            class="btn btn-secondary"
+            hx-post="{% url 'box_immich_retry' box.uuid %}"
+            hx-target="#immich-status-{{ box.pk }}"
+            hx-swap="outerHTML">
+        Erneut versuchen
+    </button>
+    {% endif %}
+</section>

@@ -61,8 +61,16 @@
     {% if box.archived %}
     <section class="archive-summary">
         <p class="archive-banner">Diese Box ist archiviert und schreibgeschützt.</p>
-        <p class="immich-link-placeholder">Noch nicht zu Immich hochgeladen.</p>
+        {% if box.immich_album_url %}
+        <p class="immich-link-placeholder"><a href="{{ box.immich_album_url }}">In Immich öffnen</a></p>
+        {% else %}
+        <p class="immich-link-placeholder">Nicht zu Immich hochgeladen.</p>
+        {% endif %}
     </section>
+    {% endif %}
+
+    {% if not box.archived and request.user.can_upload %}
+    {% include "core/_immich_status.html" %}
     {% endif %}
 
     {% if not box.archived %}

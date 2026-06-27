@@ -34,7 +34,7 @@ def test_archive_requires_staff(auth_client):
 @pytest.mark.django_db
 def test_archive_get_shows_confirmation_when_ready(staff_client):
     box = BoxFactory(name="Omas Schachtel")
-    ImageFactory(box=box, sequence_in_box=1)
+    ImageFactory(box=box, sequence_in_box=1, immich_uploaded=True)
 
     response = staff_client.get(reverse("box_archive", args=[box.uuid]))
 
@@ -61,7 +61,7 @@ def test_archive_get_lists_open_todos_when_not_ready(staff_client):
 @pytest.mark.django_db
 def test_archive_post_archives_when_name_matches(staff_client):
     box = BoxFactory(name="Fertig")
-    ImageFactory(box=box, sequence_in_box=1)
+    ImageFactory(box=box, sequence_in_box=1, immich_uploaded=True)
 
     response = staff_client.post(
         reverse("box_archive", args=[box.uuid]), {"confirm_name": "Fertig"}
@@ -76,6 +76,7 @@ def test_archive_post_archives_when_name_matches(staff_client):
 @pytest.mark.django_db
 def test_archive_post_rejects_wrong_confirmation(staff_client):
     box = BoxFactory(name="Korrekt")
+    ImageFactory(box=box, sequence_in_box=1, immich_uploaded=True)
 
     response = staff_client.post(
         reverse("box_archive", args=[box.uuid]), {"confirm_name": "Falsch"}
@@ -100,7 +101,8 @@ def test_archive_already_archived_redirects_to_grid(staff_client):
 @pytest.mark.django_db
 def test_archive_post_with_blocker_surfaces_error(staff_client):
     box = BoxFactory(name="Block")
-    ImageFactory(box=box, sequence_in_box=1, place_todo=True)
+    # Immich-complete but still has an open todo, so box.archive() raises.
+    ImageFactory(box=box, sequence_in_box=1, place_todo=True, immich_uploaded=True)
     # confirm_name wouldn't even be shown because can_archive is False;
     # but if someone POSTs anyway, we show the error and don't archive.
     response = staff_client.post(
@@ -110,14 +112,47 @@ def test_archive_post_with_blocker_surfaces_error(staff_client):
     box.refresh_from_db()
     assert response.status_code == 200
     assert box.archived is False
+    assert "Box kann nicht archiviert werden." in response.content.decode()
 
 
 @pytest.mark.django_db
-def test_grid_for_archived_box_shows_immich_placeholder(staff_client):
+def test_archive_post_blocked_when_not_immich_complete(staff_client):
+    box = BoxFactory(name="Unhochgeladen")
+    # no open todos, so can_archive is True, but no Immich upload yet
+    ImageFactory(box=box, sequence_in_box=1)
+
+    response = staff_client.post(
+        reverse("box_archive", args=[box.uuid]), {"confirm_name": "Unhochgeladen"}
+    )
+
+    box.refresh_from_db()
+    assert response.status_code == 200
+    assert box.archived is False
+    assert (
+        "Box muss zuerst vollständig zu Immich hochgeladen werden"
+        in response.content.decode()
+    )
+
+
+@pytest.mark.django_db
+def test_grid_for_archived_box_shows_immich_fallback(staff_client):
     box = BoxFactory(archived=True)
 
     response = staff_client.get(reverse("box_grid", args=[box.uuid]))
 
     content = response.content.decode()
     assert "archiviert" in content
-    assert "Noch nicht zu Immich hochgeladen." in content
+    assert "Nicht zu Immich hochgeladen." in content
+
+
+@pytest.mark.django_db
+def test_grid_for_archived_box_shows_immich_album_link(staff_client):
+    box = BoxFactory(
+        archived=True, immich_album_url="https://immich.test/albums/album-1"
+    )
+
+    response = staff_client.get(reverse("box_grid", args=[box.uuid]))
+
+    content = response.content.decode()
+    assert "In Immich öffnen" in content
+    assert "https://immich.test/albums/album-1" in content

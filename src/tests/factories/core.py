@@ -44,10 +44,26 @@ class BoxFactory(factory.django.DjangoModelFactory):
 class ImageFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Image
+        skip_postgeneration_save = True
 
     box = factory.SubFactory(BoxFactory)
     filename = factory.Sequence(lambda n: f"scan_{n:04d}.jpg")
     sequence_in_box = factory.Sequence(lambda n: n + 1)
+
+    @factory.post_generation
+    def immich_uploaded(self, create, extracted, **kwargs):
+        """Mark the image as already uploaded and current in Immich.
+
+        Use ``ImageFactory(..., immich_uploaded=True)`` so the parent box is
+        ``immich_complete`` (asset id set and signature matches the current
+        metadata).
+        """
+        if not extracted:
+            return
+        self.immich_asset_id = f"asset-{self.uuid}"
+        self.immich_signature = self.compute_immich_signature()
+        if create:
+            self.save(skip_log=True, bump_version=False)
 
 
 class DriverStateFactory(factory.django.DjangoModelFactory):

@@ -16,6 +16,21 @@ urlpatterns = [
     path("box/neu/", views.box_edit, name="box_create"),
     path("box/<uuid:box_uuid>/bearbeiten/", views.box_edit, name="box_edit"),
     path("box/<uuid:box_uuid>/archiv/", views.box_archive, name="box_archive"),
+    path(
+        "box/<uuid:box_uuid>/immich/",
+        views.box_immich_finalize,
+        name="box_immich_finalize",
+    ),
+    path(
+        "box/<uuid:box_uuid>/immich/status/",
+        views.box_immich_status,
+        name="box_immich_status",
+    ),
+    path(
+        "box/<uuid:box_uuid>/immich/erneut/",
+        views.box_immich_retry,
+        name="box_immich_retry",
+    ),
     path("orte/", views.place_list, name="place_list"),
     path("orte/<int:pk>/", views.place_set_coords, name="place_set_coords"),
     path("konto/", views.account_settings, name="account_settings"),

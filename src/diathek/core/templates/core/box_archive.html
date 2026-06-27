@@ -16,6 +16,7 @@
         <dt>Datum unklar</dt><dd>{{ progress.todo_date }}</dd>
         <dt>Spiegeln nötig</dt><dd>{{ progress.todo_flip }}</dd>
         <dt>Lightroom-Notizen</dt><dd>{{ progress.todo_edit }}</dd>
+        <dt>Zu Immich hochgeladen</dt><dd>{{ box.immich_uploaded_count }}/{{ box.immich_total }}</dd>
     </dl>
 </section>
 
@@ -37,6 +38,12 @@
     {% endfor %}
 </ul>
 <p><a class="btn btn-secondary" href="{% url 'box_grid' box.uuid %}">Zur Galerie</a></p>
+{% elif not box.immich_complete %}
+<p class="archive-banner archive-banner--warn">
+    Box muss zuerst vollständig zu Immich hochgeladen werden
+    ({{ box.immich_uploaded_count }}/{{ box.immich_total }}).
+</p>
+<p><a class="btn btn-secondary" href="{% url 'box_grid' box.uuid %}">Zur Galerie (Immich-Upload)</a></p>
 {% else %}
 <p class="archive-warning">
     Archivieren ist endgültig. Die Originaldateien und großen Vorschaubilder werden von der Platte gelöscht;

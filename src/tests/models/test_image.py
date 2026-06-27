@@ -32,6 +32,25 @@ def test_image_save_bumps_version_each_time():
 
 
 @pytest.mark.django_db
+def test_image_factory_immich_uploaded_trait_marks_current():
+    image = ImageFactory(immich_uploaded=True)
+
+    assert image.immich_asset_id == f"asset-{image.uuid}"
+    assert image.immich_is_current
+    image.refresh_from_db()
+    assert image.immich_is_current
+
+
+@pytest.mark.django_db
+def test_image_factory_immich_uploaded_trait_build_does_not_save():
+    image = ImageFactory.build(immich_uploaded=True)
+
+    assert image.immich_asset_id == f"asset-{image.uuid}"
+    assert image.immich_signature == image.compute_immich_signature()
+    assert image.pk is None
+
+
+@pytest.mark.django_db
 def test_image_has_open_todos_true_for_each_todo_flag():
     assert ImageFactory.build(place_todo=True).has_open_todos()
     assert ImageFactory.build(date_todo=True).has_open_todos()

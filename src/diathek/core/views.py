@@ -28,7 +28,8 @@ from diathek.core.metadata import (
     parse_batch_payload,
     parse_metadata_payload,
 )
-from diathek.core.models import Box, DriverState, Image, InviteCode, Place
+from diathek.core.models import Box, DriverState, Image, ImmichState, InviteCode, Place
+from diathek.core.tasks import finalize_box
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
 from diathek.metadata.coords import parse_coordinates
@@ -42,6 +43,10 @@ def _staff_required(view):
 
 
 def _upload_required(view):
+    return user_passes_test(lambda u: u.is_active and u.can_upload)(view)
+
+
+def _immich_required(view):
     return user_passes_test(lambda u: u.is_active and u.can_upload)(view)
 
 
@@ -1054,13 +1059,18 @@ def box_archive(request, box_uuid):
     if request.method == "POST":
         form = BoxArchiveForm(request.POST, box=box)
         if form.is_valid():
-            try:
-                box.archive(user=request.user)
-            except ValueError as err:
-                messages.error(request, str(err))
+            if not box.immich_complete:
+                messages.error(
+                    request, "Box muss zuerst vollständig zu Immich hochgeladen werden."
+                )
             else:
-                messages.success(request, f"Box „{box.name}“ archiviert.")
-                return redirect("box_grid", box_uuid=box.uuid)
+                try:
+                    box.archive(user=request.user)
+                except ValueError as err:
+                    messages.error(request, str(err))
+                else:
+                    messages.success(request, f"Box „{box.name}“ archiviert.")
+                    return redirect("box_grid", box_uuid=box.uuid)
 
     images = box.images.select_related("place").order_by("sequence_in_box")
     open_todos = [image for image in images if image.has_open_todos()]
@@ -1075,6 +1085,78 @@ def box_archive(request, box_uuid):
             "open_todos": open_todos,
         },
     )
+
+
+def _render_immich_status(request, box, *, message=None):
+    return render(
+        request,
+        "core/_immich_status.html",
+        {"box": box, "immich_message": message, "request": request},
+    )
+
+
+def _immich_finalize_rejection(request, box):
+    if box.archived:
+        return "Archivierte Box kann nicht hochgeladen werden."
+    if not request.user.has_immich_configured:
+        return "Bitte zuerst einen Immich-API-Schlüssel hinterlegen."
+    if not settings.IMMICH_BASE_URL:
+        return "Immich-Server ist nicht konfiguriert."
+    if any(image.has_open_todos() for image in box.images.all()):
+        return "Box hat noch offene Aufgaben."
+    if box.immich_state == ImmichState.IN_PROGRESS:
+        return "Upload läuft bereits."
+    if not box.images.exists():
+        return "Box enthält keine Bilder."
+    return None
+
+
+@login_required
+@_immich_required
+@require_POST
+def box_immich_finalize(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid)
+
+    rejection = _immich_finalize_rejection(request, box)
+    if rejection is not None:
+        return _render_immich_status(request, box, message=rejection)
+
+    box.immich_state = ImmichState.IN_PROGRESS
+    box.immich_error = ""
+    box.save()
+    finalize_box.enqueue(box.id, request.user.id)
+    box.refresh_from_db()
+    return _render_immich_status(request, box)
+
+
+@login_required
+@_immich_required
+def box_immich_status(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid)
+    return _render_immich_status(request, box)
+
+
+@login_required
+@_immich_required
+@require_POST
+def box_immich_retry(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid)
+
+    if box.immich_state != ImmichState.FAILED:
+        return _render_immich_status(
+            request, box, message="Erneuter Versuch ist nur nach einem Fehler möglich."
+        )
+    if box.archived:
+        return _render_immich_status(
+            request, box, message="Archivierte Box kann nicht hochgeladen werden."
+        )
+
+    box.immich_state = ImmichState.IN_PROGRESS
+    box.immich_error = ""
+    box.save()
+    finalize_box.enqueue(box.id, request.user.id)
+    box.refresh_from_db()
+    return _render_immich_status(request, box)
 
 
 @login_required
