@@ -12,6 +12,7 @@ authors = [
 dependencies = [
   "Django~=6.0.0",
   "django-tasks-db",
+  "djangorestframework~=3.16",
   "gunicorn~=25.3.0",
   "pillow~=11.3.0",
   "urllib3~=2.7.0",

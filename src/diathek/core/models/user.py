@@ -1,9 +1,15 @@
+import secrets
+
 from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
     PermissionsMixin,
 )
 from django.db import models
+
+
+def generate_api_token():
+    return secrets.token_urlsafe(48)
 
 
 class UserManager(BaseUserManager):
@@ -35,6 +41,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     can_upload = models.BooleanField(default=False)
     last_poll = models.DateTimeField(null=True, blank=True, db_index=True)
     immich_api_key = models.CharField(max_length=255, blank=True)
+    api_token = models.CharField(
+        max_length=128, unique=True, null=True, blank=True, default=None
+    )
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["name"]
@@ -53,3 +62,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def has_immich_configured(self):
         return bool(self.immich_api_key)
+
+    def regenerate_api_token(self):
+        self.api_token = generate_api_token()
+        self.save(update_fields=["api_token"])
+        return self.api_token
+
+    def clear_api_token(self):
+        self.api_token = None
+        self.save(update_fields=["api_token"])

@@ -8,6 +8,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("login/", LoginView.as_view(template_name="core/login.html"), name="login"),
     path("logout/", LogoutView.as_view(next_page="/"), name="logout"),
+    path("api/v1/", include("diathek.core.api.urls")),
     path("", include("diathek.core.urls")),
 ]
 

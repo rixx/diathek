@@ -50,4 +50,39 @@
         Kontoeinstellungen → API-Schlüssel.
     </p>
 </section>
+
+<section class="account-section">
+    <h2>API-Token</h2>
+
+    <p>
+        Mit einem persönlichen API-Token kannst du die diathek-API ansprechen,
+        z.&nbsp;B. um Metadaten per Skript zu setzen. Übergib ihn als
+        <code>Authorization: Bearer &lt;token&gt;</code>-Header oder als
+        <code>?token=&lt;token&gt;</code>-Parameter. Änderungen werden dir im
+        Verlauf zugeschrieben.
+    </p>
+
+    {% if api_token %}
+    <p>Dein aktueller Token:</p>
+    <pre class="api-token"><code>{{ api_token }}</code></pre>
+    <div class="form-actions">
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" name="generate_api_token" value="1" class="btn">Neu generieren</button>
+        </form>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" name="clear_api_token" value="1" class="btn btn-danger">Entfernen</button>
+        </form>
+    </div>
+    {% else %}
+    <p>Es ist noch kein API-Token hinterlegt.</p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-actions">
+            <button type="submit" name="generate_api_token" value="1" class="btn btn-primary">Token generieren</button>
+        </div>
+    </form>
+    {% endif %}
+</section>
 {% endblock %}

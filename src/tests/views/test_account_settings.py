@@ -166,6 +166,61 @@ def test_post_too_long_key_rerenders_form_without_saving(auth_client, settings, 
 
 
 @pytest.mark.django_db
+def test_konto_shows_generate_button_when_no_token(auth_client):
+    response = auth_client.get(reverse("account_settings"))
+
+    content = response.content.decode()
+    assert "Es ist noch kein API-Token hinterlegt." in content
+    assert 'name="generate_api_token"' in content
+
+
+@pytest.mark.django_db
+def test_generate_api_token(auth_client):
+    response = auth_client.post(
+        reverse("account_settings"), {"generate_api_token": "1"}
+    )
+
+    assert response.status_code == 302
+    auth_client.user.refresh_from_db()
+    assert auth_client.user.api_token
+    messages = list(response.wsgi_request._messages)
+    assert any("Neuer API-Token erzeugt" in str(m) for m in messages)
+
+
+@pytest.mark.django_db
+def test_generate_api_token_replaces_existing(auth_client):
+    old = auth_client.user.regenerate_api_token()
+
+    auth_client.post(reverse("account_settings"), {"generate_api_token": "1"})
+
+    auth_client.user.refresh_from_db()
+    assert auth_client.user.api_token
+    assert auth_client.user.api_token != old
+
+
+@pytest.mark.django_db
+def test_existing_token_is_displayed(auth_client):
+    auth_client.user.regenerate_api_token()
+
+    response = auth_client.get(reverse("account_settings"))
+
+    assert auth_client.user.api_token in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_clear_api_token(auth_client):
+    auth_client.user.regenerate_api_token()
+
+    response = auth_client.post(reverse("account_settings"), {"clear_api_token": "1"})
+
+    assert response.status_code == 302
+    auth_client.user.refresh_from_db()
+    assert auth_client.user.api_token is None
+    messages = list(response.wsgi_request._messages)
+    assert any("entfernt" in str(m) for m in messages)
+
+
+@pytest.mark.django_db
 def test_nav_shows_account_link(auth_client):
     response = auth_client.get(reverse("index"))
 

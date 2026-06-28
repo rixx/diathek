@@ -31,8 +31,22 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "django_tasks_db",
+    "rest_framework",
     "diathek.core",
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "diathek.core.api.auth.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_PAGINATION_CLASS": "diathek.core.api.pagination.DefaultPagination",
+    "PAGE_SIZE": 100,
+    "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S%z",
+    "DATE_FORMAT": "%Y-%m-%d",
+    "UNAUTHENTICATED_USER": None,
+}
 
 TASKS = {
     "default": {"BACKEND": "django_tasks_db.DatabaseBackend", "QUEUES": ["default"]}

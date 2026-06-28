@@ -716,17 +716,18 @@ def _diff_updates(image, updates):
     return changed
 
 
-def _commit_image_updates(request, locked, expected_version, updates):
+def apply_image_updates(locked, updates, *, user, expected_version):
     """Persist ``updates`` to an already-locked image with version checking.
 
-    Returns the re-rendered metadata fragment: unchanged on a noop, a 409
-    conflict fragment when the optimistic version check fails, and the new
-    state plus an audit-log entry on success. Must be called inside the
-    transaction that holds the ``select_for_update`` lock on ``locked``.
+    Returns ``"noop"`` when nothing changed, ``"conflict"`` when the optimistic
+    version check fails (the row was modified concurrently), or ``"ok"`` on a
+    successful write. On success and on conflict ``locked`` is refreshed from
+    the database. Must be called inside the transaction that holds the
+    ``select_for_update`` lock on ``locked``.
     """
     changed = _diff_updates(locked, updates)
     if not changed:
-        return _render_fragment(request, locked)
+        return "noop"
 
     before = locked._snapshot()
     rowcount = Image.objects.filter(pk=locked.pk, version=expected_version).update(
@@ -734,17 +735,31 @@ def _commit_image_updates(request, locked, expected_version, updates):
     )
     if rowcount == 0:
         locked.refresh_from_db()
-        return _render_fragment(request, locked, status=409, conflict=True)
+        return "conflict"
 
     locked.refresh_from_db()
     after = locked._snapshot()
     changed_keys = [k for k in after if before.get(k) != after.get(k)]
     locked.log_action(
         "image.change",
-        user=request.user,
+        user=user,
         before={k: before[k] for k in changed_keys},
         after={k: after[k] for k in changed_keys},
     )
+    return "ok"
+
+
+def _commit_image_updates(request, locked, expected_version, updates):
+    """Persist ``updates`` for the web UI and re-render the metadata fragment.
+
+    Wraps :func:`apply_image_updates`: a noop or success re-renders the current
+    state, a version clash renders the 409 conflict fragment.
+    """
+    result = apply_image_updates(
+        locked, updates, user=request.user, expected_version=expected_version
+    )
+    if result == "conflict":
+        return _render_fragment(request, locked, status=409, conflict=True)
     return _render_fragment(request, locked)
 
 
@@ -1314,6 +1329,15 @@ def account_settings(request):
     user = request.user
 
     if request.method == "POST":
+        if "generate_api_token" in request.POST:
+            user.regenerate_api_token()
+            messages.success(request, "Neuer API-Token erzeugt.")
+            return redirect("account_settings")
+        if "clear_api_token" in request.POST:
+            user.clear_api_token()
+            messages.success(request, "API-Token entfernt.")
+            return redirect("account_settings")
+
         form = ImmichKeyForm(request.POST)
         if form.is_valid():
             key = form.cleaned_data["immich_api_key"].strip()
@@ -1358,6 +1382,7 @@ def account_settings(request):
             "form": form,
             "immich_base_url": settings.IMMICH_BASE_URL,
             "has_immich_configured": user.has_immich_configured,
+            "api_token": user.api_token,
         },
     )
 
