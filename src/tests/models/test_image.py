@@ -163,14 +163,31 @@ def test_effective_capture_datetime_returned_when_day_matches():
 
 
 @pytest.mark.django_db
-def test_effective_capture_datetime_ignored_when_date_edited_away():
+def test_effective_capture_datetime_rebases_time_onto_current_date():
+    # Editing the rough date keeps the pulled time-of-day, rebased onto the new
+    # (representative) day — so the precise time is not silently dropped.
     image = ImageFactory.build(
         date_earliest=datetime.date(1990, 1, 1),
         date_latest=datetime.date(1990, 1, 1),
         immich_capture_datetime="1987-06-15T14:30:00+02:00",
     )
 
-    assert image.effective_capture_datetime() is None
+    assert image.effective_capture_datetime() == datetime.datetime(
+        1990, 1, 1, 14, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=2))
+    )
+
+
+@pytest.mark.django_db
+def test_effective_capture_datetime_uses_representative_midpoint():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 1),
+        date_latest=datetime.date(1987, 8, 31),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    assert image.effective_capture_datetime() == datetime.datetime(
+        1987, 7, 16, 14, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=2))
+    )
 
 
 @pytest.mark.django_db
@@ -199,6 +216,79 @@ def test_effective_capture_datetime_none_when_malformed():
     )
 
     assert image.effective_capture_datetime() is None
+
+
+@pytest.mark.django_db
+def test_immich_capture_time_and_offset_label_for_input():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    assert image.immich_capture_time() == "14:30:00"
+    assert image.immich_capture_offset_label() == "UTC+02:00"
+
+
+@pytest.mark.django_db
+def test_immich_capture_offset_label_blank_when_naive():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="1987-06-15T14:30:00",
+    )
+
+    assert image.immich_capture_time() == "14:30:00"
+    assert image.immich_capture_offset_label() == ""
+
+
+@pytest.mark.django_db
+def test_immich_capture_time_and_label_blank_without_capture():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="",
+    )
+
+    assert image.immich_capture_time() == ""
+    assert image.immich_capture_offset_label() == ""
+
+
+@pytest.mark.django_db
+def test_capture_datetime_with_time_preserves_offset_and_uses_date():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    result = image.capture_datetime_with_time(datetime.time(14, 40, 0))
+
+    assert result == "1987-06-15T14:40:00+02:00"
+
+
+@pytest.mark.django_db
+def test_capture_datetime_with_time_blank_without_date():
+    image = ImageFactory.build(
+        date_earliest=None,
+        date_latest=None,
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    assert image.capture_datetime_with_time(datetime.time(14, 40, 0)) == ""
+
+
+@pytest.mark.django_db
+def test_capture_datetime_with_time_drops_offset_when_stored_value_malformed():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="not-a-datetime",
+    )
+
+    result = image.capture_datetime_with_time(datetime.time(14, 40, 0))
+
+    assert result == "1987-06-15T14:40:00"
 
 
 @pytest.mark.django_db

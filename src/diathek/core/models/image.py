@@ -1,3 +1,4 @@
+import contextlib
 import uuid
 from datetime import datetime, timedelta
 
@@ -164,12 +165,15 @@ class Image(BaseModel):
         return self.date_earliest + timedelta(days=span // 2)
 
     def effective_capture_datetime(self):
-        """The exact Immich capture timestamp, only while it still fits the date.
+        """The exact capture timestamp baked into the export, or ``None``.
 
-        Returns the parsed timezone-aware ``datetime`` from
-        :attr:`immich_capture_datetime` when its day matches the current
-        representative date, otherwise ``None``. Editing the date away from the
-        pulled value (or never having pulled one) falls back to noon on export.
+        Combines the representative date (the single source of truth for the day)
+        with the time-of-day and UTC offset stored in
+        :attr:`immich_capture_datetime`. The stored time starts from an Immich
+        pull and can then be nudged by the user; it is rebased onto whatever date
+        the date field currently resolves to, so editing the rough date keeps the
+        time. ``None`` when nothing was pulled, the value is unparseable, or no
+        date is set (no day to attach the time to) — the export falls back to noon.
         """
         if not self.immich_capture_datetime:
             return None
@@ -180,9 +184,37 @@ class Image(BaseModel):
             parsed = datetime.fromisoformat(self.immich_capture_datetime)
         except ValueError:
             return None
-        if parsed.date() != rep:
-            return None
-        return parsed
+        return datetime.combine(rep, parsed.timetz())
+
+    def immich_capture_time(self):
+        """``HH:MM:SS`` for the editable capture-time input, or ``""`` if none."""
+        capture = self.effective_capture_datetime()
+        return capture.strftime("%H:%M:%S") if capture else ""
+
+    def immich_capture_offset_label(self):
+        """The capture time's UTC offset (e.g. ``UTC+02:00``), shown read-only."""
+        capture = self.effective_capture_datetime()
+        if capture is None:
+            return ""
+        offset = capture.strftime("%z")
+        return f"UTC{offset[:3]}:{offset[3:]}" if offset else ""
+
+    def capture_datetime_with_time(self, time_obj):
+        """Return the ISO value to store for a user-set capture time-of-day.
+
+        Combines the representative date with ``time_obj``, preserving the UTC
+        offset of the existing pulled value so a tweak ("ten minutes later")
+        keeps the original timezone. Returns ``""`` when there is no date to
+        attach the time to.
+        """
+        rep = self.date_representative()
+        if rep is None:
+            return ""
+        tzinfo = None
+        # No prior pull, or a stored value we can't read → no offset to preserve.
+        with contextlib.suppress(ValueError):
+            tzinfo = datetime.fromisoformat(self.immich_capture_datetime).tzinfo
+        return datetime.combine(rep, time_obj, tzinfo=tzinfo).isoformat()
 
     def compute_immich_signature(self):
         import hashlib

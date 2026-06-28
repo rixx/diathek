@@ -26,6 +26,7 @@ from diathek.core.immich import ImmichClient, ImmichError
 from diathek.core.metadata import (
     MetadataError,
     parse_batch_payload,
+    parse_capture_time,
     parse_metadata_payload,
 )
 from diathek.core.models import Box, DriverState, Image, ImmichState, InviteCode, Place
@@ -678,6 +679,11 @@ def box_grid(request, box_uuid):
     )
 
 
+# Sentinel distinguishing "capture_time absent from the request" (leave as-is)
+# from "capture_time present but empty" (no usable time → skip the update).
+_MISSING = object()
+
+
 @login_required
 @require_http_methods(["PATCH", "POST"])
 def image_save(request, image_id):
@@ -689,6 +695,11 @@ def image_save(request, image_id):
 
     try:
         updates = parse_metadata_payload(data)
+        capture_time = (
+            parse_capture_time(data["capture_time"])
+            if "capture_time" in data
+            else _MISSING
+        )
     except MetadataError as err:
         image = get_object_or_404(
             Image.objects.select_related("box", "place"), pk=image_id
@@ -707,6 +718,11 @@ def image_save(request, image_id):
 
         if locked.box and locked.box.archived:
             return HttpResponseForbidden("Box ist archiviert.")
+
+        if capture_time is not _MISSING and capture_time is not None:
+            updates["immich_capture_datetime"] = locked.capture_datetime_with_time(
+                capture_time
+            )
 
         if "place" in data:
             place = _resolve_place(data["place"], user=request.user)

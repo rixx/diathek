@@ -58,11 +58,26 @@ def test_build_args_bakes_immich_capture_time_and_offset():
     assert "-OffsetTimeOriginal=+02:00" in args
 
 
-def test_build_args_falls_back_to_noon_when_date_edited_away_from_capture():
+def test_build_args_rebases_capture_time_onto_edited_date():
+    # Editing the rough date keeps the pulled time-of-day, rebased onto the new
+    # day rather than dropping it back to noon.
     image = ImageFactory(
         date_earliest=datetime.date(1990, 1, 1),
         date_latest=datetime.date(1990, 1, 1),
         immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    args = build_args_for_image(image)
+
+    assert "-DateTimeOriginal=1990:01:01 14:30:00" in args
+    assert "-OffsetTimeOriginal=+02:00" in args
+
+
+def test_build_args_falls_back_to_noon_without_capture():
+    image = ImageFactory(
+        date_earliest=datetime.date(1990, 1, 1),
+        date_latest=datetime.date(1990, 1, 1),
+        immich_capture_datetime="",
     )
 
     args = build_args_for_image(image)

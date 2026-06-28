@@ -3,6 +3,8 @@
 Kept separate from views so the parsing/validation can be tested in isolation.
 """
 
+from datetime import time
+
 from diathek.metadata import dateparse
 
 
@@ -58,6 +60,25 @@ def _parse_date_display(raw):
         "date_latest": parsed.latest,
         "date_precision": parsed.precision,
     }
+
+
+def parse_capture_time(raw):
+    """Parse the editable Immich capture time-of-day field.
+
+    Accepts ``HH:MM`` or ``HH:MM:SS`` (what ``<input type="time">`` submits) and
+    returns a :class:`datetime.time`, or ``None`` for an empty value. The day and
+    UTC offset are not part of this field — the view recombines the time with the
+    image's date and the offset preserved from the original pull. Raises
+    ``MetadataError`` on a value that is not a valid time.
+    """
+    raw = raw.strip()
+    if raw == "":
+        return None
+    try:
+        # Accepts both ``HH:MM`` and ``HH:MM:SS`` (what the time input submits).
+        return time.fromisoformat(raw)
+    except ValueError:
+        raise MetadataError(f"Ungültige Uhrzeit: {raw!r}") from None
 
 
 def parse_metadata_payload(data):

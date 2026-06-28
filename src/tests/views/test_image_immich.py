@@ -104,11 +104,24 @@ def test_apply_stores_capture_datetime_with_timezone(auth_client, image, fake_as
         }
     }
 
-    _apply(auth_client, image, {"immich_link": LINK})
+    response = _apply(auth_client, image, {"immich_link": LINK})
 
     image.refresh_from_db()
     assert image.date_earliest == datetime.date(1987, 6, 15)
     assert image.immich_capture_datetime == "1987-06-15T14:30:00+02:00"
+    # The rendered fragment surfaces an editable time input prefilled with the
+    # exact pulled time, and the offset label confirms the zone.
+    body = response.content.decode()
+    assert 'name="capture_time"' in body
+    assert 'value="14:30:00"' in body
+    assert "(UTC+02:00)" in body
+
+
+@pytest.mark.django_db
+def test_capture_time_input_not_shown_without_pull(auth_client, image):
+    detail_url = reverse("image_detail", args=[image.box.uuid, image.pk])
+
+    assert 'name="capture_time"' not in auth_client.get(detail_url).content.decode()
 
 
 @pytest.mark.django_db

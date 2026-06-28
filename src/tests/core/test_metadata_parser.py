@@ -6,10 +6,32 @@ from django.http import QueryDict
 from diathek.core.metadata import (
     MetadataError,
     parse_batch_payload,
+    parse_capture_time,
     parse_metadata_payload,
 )
 
 pytestmark = pytest.mark.unit
+
+
+def test_parse_capture_time_accepts_hours_minutes_seconds():
+    assert parse_capture_time("14:30:45") == datetime.time(14, 30, 45)
+
+
+def test_parse_capture_time_accepts_hours_minutes():
+    assert parse_capture_time("14:30") == datetime.time(14, 30, 0)
+
+
+def test_parse_capture_time_empty_is_none():
+    assert parse_capture_time("  ") is None
+
+
+def test_parse_capture_time_midnight():
+    assert parse_capture_time("00:00:00") == datetime.time(0, 0, 0)
+
+
+def test_parse_capture_time_rejects_garbage():
+    with pytest.raises(MetadataError, match="Uhrzeit"):
+        parse_capture_time("25:99")
 
 
 def _qd(**kwargs):

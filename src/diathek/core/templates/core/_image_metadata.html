@@ -67,6 +67,23 @@
 
     {% include "core/_date_input.html" %}
 
+    {% with capture_time=image.immich_capture_time %}
+    {% if capture_time %}
+    <label class="field immich-capture" data-immich-capture>
+        <span>🕒 Aufnahmezeit aus Immich{% if image.immich_capture_offset_label %} ({{ image.immich_capture_offset_label }}){% endif %}</span>
+        <input type="time"
+               name="capture_time"
+               step="1"
+               value="{{ capture_time }}"
+               hx-patch="{% url 'image_save' image.pk %}"
+               hx-headers='{"If-Match": "{{ image.version }}"}'
+               hx-target="#image-form-{{ image.pk }}"
+               hx-swap="outerHTML"
+               hx-trigger="change">
+    </label>
+    {% endif %}
+    {% endwith %}
+
     <label class="field checkbox">
         <input type="checkbox"
                name="date_todo"

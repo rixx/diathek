@@ -194,6 +194,53 @@ def test_save_invalid_payload_returns_400_with_error_fragment(auth_client, image
 
 
 @pytest.mark.django_db
+def test_save_capture_time_edits_keep_date_and_offset(auth_client, image):
+    image.date_earliest = datetime.date(1987, 6, 15)
+    image.date_latest = datetime.date(1987, 6, 15)
+    image.immich_capture_datetime = "1987-06-15T14:30:00+02:00"
+    image.save(user=auth_client.user)
+
+    response = _patch(auth_client, image, {"capture_time": "14:40:00"})
+
+    assert response.status_code == 200
+    image.refresh_from_db()
+    # New time-of-day, same day, original offset preserved.
+    assert image.immich_capture_datetime == "1987-06-15T14:40:00+02:00"
+    assert 'value="14:40:00"' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_save_capture_time_invalid_returns_400(auth_client, image):
+    image.date_earliest = datetime.date(1987, 6, 15)
+    image.date_latest = datetime.date(1987, 6, 15)
+    image.immich_capture_datetime = "1987-06-15T14:30:00+02:00"
+    image.save(user=auth_client.user)
+
+    response = _patch(auth_client, image, {"capture_time": "25:99"})
+
+    assert response.status_code == 400
+    assert "Uhrzeit" in response.content.decode()
+    image.refresh_from_db()
+    assert image.immich_capture_datetime == "1987-06-15T14:30:00+02:00"
+
+
+@pytest.mark.django_db
+def test_save_empty_capture_time_leaves_value_untouched(auth_client, image):
+    image.date_earliest = datetime.date(1987, 6, 15)
+    image.date_latest = datetime.date(1987, 6, 15)
+    image.immich_capture_datetime = "1987-06-15T14:30:00+02:00"
+    image.save(user=auth_client.user)
+    old_version = image.version
+
+    response = _patch(auth_client, image, {"capture_time": ""})
+
+    assert response.status_code == 200
+    image.refresh_from_db()
+    assert image.immich_capture_datetime == "1987-06-15T14:30:00+02:00"
+    assert image.version == old_version  # nothing changed → no version bump
+
+
+@pytest.mark.django_db
 def test_save_noop_when_value_matches_stored(auth_client, image):
     image.place_todo = True
     image.save(user=auth_client.user)
