@@ -1285,18 +1285,28 @@ def _render_immich_status(request, box, *, message=None):
 
 
 def _immich_finalize_rejection(request, box):
+    # Configuration / state guards first — they trump any per-image readiness.
     if box.archived:
         return "Archivierte Box kann nicht hochgeladen werden."
     if not request.user.has_immich_configured:
         return "Bitte zuerst einen Immich-API-Schlüssel hinterlegen."
     if not settings.IMMICH_BASE_URL:
         return "Immich-Server ist nicht konfiguriert."
-    if any(image.has_open_todos() for image in box.images.all()):
-        return "Box hat noch offene Aufgaben."
     if box.immich_state == ImmichState.IN_PROGRESS:
         return "Upload läuft bereits."
     if not box.images.exists():
         return "Box enthält keine Bilder."
+
+    # Per-image readiness. A correct timeline date is required (a photo with no
+    # date lands nowhere/wrong in Immich); a *missing place* is fine, but a place
+    # set without coordinates is an incomplete location and blocks upload.
+    images = list(box.images.select_related("place"))
+    if any(image.needs_date() for image in images):
+        return "Box hat Bilder ohne gesichertes Datum."
+    if any(image.place_missing_coords() for image in images):
+        return "Box hat Bilder mit Ort ohne Koordinaten."
+    if any(image.edit_todo for image in images):
+        return "Box hat Bilder mit offener Bearbeitungs-Notiz."
     return None
 
 

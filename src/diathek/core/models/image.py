@@ -158,6 +158,29 @@ class Image(BaseModel):
         """True when a location is known via a named place or direct coordinates."""
         return self.place_id is not None or self.has_coords
 
+    def needs_date(self):
+        """True when the image has no date fit for the Immich timeline.
+
+        A photo with no usable date (or one flagged "Datum unklar") would land in
+        the wrong spot — or nowhere — on the Immich timeline, so it blocks upload.
+        A missing *place*, by contrast, does not block upload.
+        """
+        return self.date_todo or self.date_representative() is None
+
+    def place_missing_coords(self):
+        """True when a named place is set but no coordinates are available.
+
+        Assigning a place but leaving it (and the image) without coordinates is an
+        incomplete location — the export can write the city name but no GPS pin —
+        so it blocks upload. Having no place at all is fine; coordinates pulled
+        from Immich (on the image or the place) satisfy this.
+        """
+        return (
+            self.place_id is not None
+            and not self.has_coords
+            and not self.place.has_coords
+        )
+
     def date_representative(self):
         if self.date_earliest is None or self.date_latest is None:
             return None

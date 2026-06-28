@@ -90,6 +90,34 @@ def test_image_has_location_via_place_or_coords():
 
 
 @pytest.mark.django_db
+def test_image_needs_date():
+    dated = {
+        "date_earliest": datetime.date(1990, 1, 1),
+        "date_latest": datetime.date(1990, 1, 1),
+    }
+    assert ImageFactory.build(date_earliest=None, date_latest=None).needs_date()
+    assert ImageFactory.build(**dated, date_todo=True).needs_date()
+    assert not ImageFactory.build(**dated, date_todo=False).needs_date()
+
+
+@pytest.mark.django_db
+def test_image_place_missing_coords():
+    with_coords = PlaceFactory(latitude=Decimal("52.5"), longitude=Decimal("13.4"))
+    without_coords = PlaceFactory(latitude=None, longitude=None)
+
+    # No place at all → nothing missing (a missing place is allowed).
+    assert not ImageFactory.build(place=None).place_missing_coords()
+    # Place but no coords anywhere → missing.
+    assert ImageFactory.build(place=without_coords).place_missing_coords()
+    # Place with its own coords → fine.
+    assert not ImageFactory.build(place=with_coords).place_missing_coords()
+    # Coord-less place but the image carries its own coords → fine.
+    assert not ImageFactory.build(
+        place=without_coords, latitude=Decimal("1.0"), longitude=Decimal("2.0")
+    ).place_missing_coords()
+
+
+@pytest.mark.django_db
 def test_compute_immich_signature_includes_coords_when_set():
     image = ImageFactory.build()
     before = image.compute_immich_signature()

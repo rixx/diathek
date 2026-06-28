@@ -1,14 +1,23 @@
+import datetime
 import os
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from django.urls import reverse
 
 from diathek.core.models import ImmichState
-from tests.factories import BoxFactory, ImageFactory, UserFactory
+from tests.factories import BoxFactory, ImageFactory, PlaceFactory, UserFactory
 
 pytestmark = pytest.mark.integration
+
+
+def _uploadable_image(box, **kwargs):
+    """An image that clears the upload-readiness checks: it has a usable date."""
+    kwargs.setdefault("date_earliest", datetime.date(1990, 1, 1))
+    kwargs.setdefault("date_latest", datetime.date(1990, 1, 1))
+    return ImageFactory(box=box, **kwargs)
 
 
 class FakeClient:
@@ -138,8 +147,8 @@ def test_finalize_missing_box_returns_404(upload_client):
 @pytest.mark.django_db
 def test_finalize_uploads_box(upload_client, immich_url, rendered, fake_client):
     box = BoxFactory(name="Sommer 90")
-    ImageFactory(box=box, sequence_in_box=1)
-    ImageFactory(box=box, sequence_in_box=2)
+    _uploadable_image(box, sequence_in_box=1)
+    _uploadable_image(box, sequence_in_box=2)
 
     response = upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
 
@@ -157,7 +166,7 @@ def test_finalize_uploads_box(upload_client, immich_url, rendered, fake_client):
 def test_finalize_sets_in_progress_and_enqueues(upload_client, immich_url, mocker):
     enqueue = mocker.patch("diathek.core.views.finalize_box").enqueue
     box = BoxFactory()
-    ImageFactory(box=box, sequence_in_box=1)
+    _uploadable_image(box, sequence_in_box=1)
 
     response = upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
 
@@ -219,17 +228,96 @@ def test_finalize_rejects_without_base_url(upload_client, settings, mocker):
 
 
 @pytest.mark.django_db
-def test_finalize_rejects_open_todos(upload_client, immich_url, mocker):
+def test_finalize_rejects_missing_date(upload_client, immich_url, mocker):
     enqueue = mocker.patch("diathek.core.views.finalize_box").enqueue
     box = BoxFactory()
-    ImageFactory(box=box, sequence_in_box=1, place_todo=True)
+    ImageFactory(box=box, sequence_in_box=1)  # no date → out of place in timeline
 
     response = upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
 
     box.refresh_from_db()
     assert box.immich_state == ImmichState.NOT_UPLOADED
     enqueue.assert_not_called()
-    assert "Box hat noch offene Aufgaben." in response.content.decode()
+    assert "ohne gesichertes Datum" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_finalize_rejects_date_todo_flag(upload_client, immich_url, mocker):
+    enqueue = mocker.patch("diathek.core.views.finalize_box").enqueue
+    box = BoxFactory()
+    _uploadable_image(box, sequence_in_box=1, date_todo=True)
+
+    response = upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
+
+    box.refresh_from_db()
+    assert box.immich_state == ImmichState.NOT_UPLOADED
+    enqueue.assert_not_called()
+    assert "ohne gesichertes Datum" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_finalize_rejects_place_without_coords(upload_client, immich_url, mocker):
+    enqueue = mocker.patch("diathek.core.views.finalize_box").enqueue
+    box = BoxFactory()
+    placeless_coords = PlaceFactory(latitude=None, longitude=None)
+    _uploadable_image(box, sequence_in_box=1, place=placeless_coords)
+
+    response = upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
+
+    box.refresh_from_db()
+    assert box.immich_state == ImmichState.NOT_UPLOADED
+    enqueue.assert_not_called()
+    assert "Ort ohne Koordinaten" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_finalize_allows_missing_place(
+    upload_client, immich_url, rendered, fake_client
+):
+    # A photo without any place is fine to upload; place_todo does not block.
+    box = BoxFactory()
+    _uploadable_image(box, sequence_in_box=1, place=None, place_todo=True)
+
+    upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
+
+    box.refresh_from_db()
+    assert box.immich_state == ImmichState.UPLOADED
+
+
+@pytest.mark.django_db
+def test_finalize_allows_place_with_image_coords_only(
+    upload_client, immich_url, rendered, fake_client
+):
+    # Place lacks coords, but the image carries its own (e.g. pulled from Immich):
+    # location is complete, so upload proceeds.
+    box = BoxFactory()
+    placeless = PlaceFactory(latitude=None, longitude=None)
+    _uploadable_image(
+        box,
+        sequence_in_box=1,
+        place=placeless,
+        latitude=Decimal("52.5"),
+        longitude=Decimal("13.4"),
+    )
+
+    upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
+
+    box.refresh_from_db()
+    assert box.immich_state == ImmichState.UPLOADED
+
+
+@pytest.mark.django_db
+def test_finalize_rejects_edit_todo(upload_client, immich_url, mocker):
+    enqueue = mocker.patch("diathek.core.views.finalize_box").enqueue
+    box = BoxFactory()
+    _uploadable_image(box, sequence_in_box=1, edit_todo="Rot reduzieren")
+
+    response = upload_client.post(reverse("box_immich_finalize", args=[box.uuid]))
+
+    box.refresh_from_db()
+    assert box.immich_state == ImmichState.NOT_UPLOADED
+    enqueue.assert_not_called()
+    assert "Bearbeitungs-Notiz" in response.content.decode()
 
 
 @pytest.mark.django_db
