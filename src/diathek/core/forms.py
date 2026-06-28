@@ -97,7 +97,9 @@ class ImportForm(forms.Form):
     BOX_UNSORTED = "__unsorted__"
     BOX_NEW = "__new__"
 
-    box_choice = forms.ChoiceField(label="Box")
+    box_choice = forms.ChoiceField(
+        label="Box", widget=forms.Select(attrs={"data-box-choice": True})
+    )
     new_box_name = forms.CharField(
         label="Name der neuen Box", required=False, max_length=200
     )

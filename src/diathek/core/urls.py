@@ -55,4 +55,5 @@ urlpatterns = [
     path("api/state/", views.state, name="state"),
     path("api/driver/", views.driver_state, name="driver_state"),
     path("api/upload/", views.api_upload, name="api_upload"),
+    path("api/upload/prepare/", views.upload_prepare, name="upload_prepare"),
 ]

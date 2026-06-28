@@ -144,6 +144,36 @@ def _save_image_files(image, original_bytes, original_name, assets):
         image.thumb_detail.save(f"{image.uuid}.webp", assets.thumb_detail, save=False)
 
 
+def _create_image_from_upload(uploaded, target_box, user):
+    """Create and persist one Image from an uploaded file.
+
+    Returns the created Image, or None when an identical file (same content
+    hash) already exists in the target box / unsorted pool. Raises
+    _ImportError for files that are not valid images.
+    """
+    raw = uploaded.read()
+    try:
+        assets = build_assets(raw)
+    except (UnidentifiedImageError, OSError):
+        raise _ImportError(f"Datei {uploaded.name} ist kein gültiges Bild.") from None
+
+    if Image.objects.filter(box=target_box, content_hash=assets.content_hash).exists():
+        return None
+
+    image = Image(
+        box=target_box,
+        filename=uploaded.name,
+        sequence_in_box=Image.next_sequence_for(target_box),
+        content_hash=assets.content_hash,
+        file_size=assets.file_size,
+        width=assets.width,
+        height=assets.height,
+    )
+    _save_image_files(image, raw, uploaded.name, assets)
+    image.save(user=user)
+    return image
+
+
 @login_required
 @_upload_required
 def import_view(request):
@@ -172,52 +202,14 @@ def import_view(request):
             if target_box is not None:
                 _reject_filename_conflicts(target_box, filenames)
 
-            start_sequence = Image.next_sequence_for(target_box)
             created = []
             skipped_hash = []
-            offset = 0
             for uploaded in ordered:
-                raw = uploaded.read()
-                try:
-                    assets = build_assets(raw)
-                except (UnidentifiedImageError, OSError):
-                    raise _ImportError(
-                        f"Datei {uploaded.name} ist kein gültiges Bild."
-                    ) from None
-
-                if (
-                    target_box is not None
-                    and Image.objects.filter(
-                        box=target_box, content_hash=assets.content_hash
-                    ).exists()
-                ):
+                image = _create_image_from_upload(uploaded, target_box, request.user)
+                if image is None:
                     skipped_hash.append(uploaded.name)
-                    continue
-                if (
-                    target_box is None
-                    and Image.objects.filter(
-                        box__isnull=True, content_hash=assets.content_hash
-                    ).exists()
-                ):
-                    skipped_hash.append(uploaded.name)
-                    continue
-
-                image = Image(
-                    box=target_box,
-                    filename=uploaded.name,
-                    sequence_in_box=(
-                        start_sequence + offset if target_box is not None else None
-                    ),
-                    content_hash=assets.content_hash,
-                    file_size=assets.file_size,
-                    width=assets.width,
-                    height=assets.height,
-                )
-                _save_image_files(image, raw, uploaded.name, assets)
-                image.save(user=request.user)
-                created.append(image)
-                if target_box is not None:
-                    offset += 1
+                else:
+                    created.append(image)
     except _ImportError as err:
         form.add_error(None, str(err))
         return render(request, "core/import.html", {"form": form})
@@ -238,6 +230,60 @@ class _ImportError(Exception):
     """Raised inside the import transaction to trigger rollback with a message."""
 
 
+def _resolve_upload_box(box_value):
+    """Resolve the ``box`` request parameter to a Box or None (unsorted).
+
+    Returns a tuple ``(target_box, error_response)``; exactly one is non-None.
+    """
+    if not box_value:
+        return None, None
+    try:
+        return Box.objects.get(pk=box_value, archived=False), None
+    except (Box.DoesNotExist, ValueError, TypeError):
+        return None, JsonResponse({"error": "Box nicht gefunden."}, status=404)
+
+
+@login_required
+@_upload_required
+@require_POST
+def upload_prepare(request):
+    """Resolve (and, for a new box, create) the upload target before files fly.
+
+    Used by the JS uploader so a new box is created exactly once instead of
+    once per file. Returns the box pk, a label, and where to send the user
+    when the upload finishes.
+    """
+    choice = request.POST.get("box_choice", "")
+    if choice in ("", ImportForm.BOX_UNSORTED):
+        target = "unsorted" if request.user.is_staff else "index"
+        return JsonResponse(
+            {"box": "", "label": "Ohne Box", "redirect": reverse(target)}
+        )
+    if choice == ImportForm.BOX_NEW:
+        name = (request.POST.get("new_box_name") or "").strip()
+        if not name:
+            return JsonResponse(
+                {"error": "Bitte einen Namen für die neue Box angeben."}, status=400
+            )
+        box = Box(
+            name=name,
+            description=(request.POST.get("new_box_description") or "").strip(),
+            sort_order=_next_box_sort_order(),
+        )
+        box.save(user=request.user)
+    else:
+        box, error = _resolve_upload_box(choice)
+        if error is not None:
+            return error
+    return JsonResponse(
+        {
+            "box": str(box.pk),
+            "label": box.name,
+            "redirect": reverse("box_grid", args=[box.uuid]),
+        }
+    )
+
+
 @login_required
 @_upload_required
 @require_POST
@@ -254,39 +300,24 @@ def api_upload(request):
             status=400,
         )
 
+    target_box, error = _resolve_upload_box(request.POST.get("box", ""))
+    if error is not None:
+        return error
+
     ordered = sorted(files, key=lambda f: f.name)
     created = []
     skipped_hash = []
 
     try:
         with transaction.atomic():
+            if target_box is not None:
+                _reject_filename_conflicts(target_box, filenames)
             for uploaded in ordered:
-                raw = uploaded.read()
-                try:
-                    assets = build_assets(raw)
-                except (UnidentifiedImageError, OSError):
-                    raise _ImportError(
-                        f"Datei {uploaded.name} ist kein gültiges Bild."
-                    ) from None
-
-                if Image.objects.filter(
-                    box__isnull=True, content_hash=assets.content_hash
-                ).exists():
+                image = _create_image_from_upload(uploaded, target_box, request.user)
+                if image is None:
                     skipped_hash.append(uploaded.name)
-                    continue
-
-                image = Image(
-                    box=None,
-                    filename=uploaded.name,
-                    sequence_in_box=None,
-                    content_hash=assets.content_hash,
-                    file_size=assets.file_size,
-                    width=assets.width,
-                    height=assets.height,
-                )
-                _save_image_files(image, raw, uploaded.name, assets)
-                image.save(user=request.user)
-                created.append(image)
+                else:
+                    created.append(image)
     except _ImportError as err:
         return JsonResponse({"error": str(err)}, status=400)
 

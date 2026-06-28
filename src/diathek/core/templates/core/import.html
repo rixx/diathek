@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load static %}
 
 {% block title %}Hochladen · diathek{% endblock %}
 
@@ -6,9 +7,12 @@
 <h1>Bilder hochladen</h1>
 
 <p>Wähle eine bestehende Box, leg eine neue an oder lad die Bilder erst einmal
-unsortiert hoch — zuordnen geht auch später.</p>
+unsortiert hoch — zuordnen geht auch später. Du kannst beliebig viele Dateien
+auf einmal auswählen; sie werden nacheinander einzeln hochgeladen.</p>
 
-<form method="post" enctype="multipart/form-data" novalidate>
+<form id="upload-form" method="post" enctype="multipart/form-data" novalidate
+      data-prepare-url="{% url 'upload_prepare' %}"
+      data-upload-url="{% url 'api_upload' %}">
     {% csrf_token %}
     {% if form.non_field_errors %}
     <ul class="errorlist">
@@ -41,11 +45,19 @@ unsortiert hoch — zuordnen geht auch später.</p>
         {% for error in form.files.errors %}<span class="error">{{ error }}</span>{% endfor %}
     </p>
 
-    <button type="submit">Hochladen</button>
+    <div class="dropzone" data-dropzone hidden>
+        Dateien hierher ziehen oder klicken zum Auswählen
+    </div>
+
+    <ol class="upload-list" data-upload-list></ol>
+    <p class="upload-summary" data-upload-summary hidden></p>
+
+    <button type="submit" class="btn btn-primary" data-upload-submit>Hochladen</button>
 </form>
 {% endblock %}
 
 {% block extra_body %}
+<script src="{% static 'core/upload.js' %}" defer></script>
 <script>
 (function () {
     const select = document.getElementById("{{ form.box_choice.id_for_label }}");

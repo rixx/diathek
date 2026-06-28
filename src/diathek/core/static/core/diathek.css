@@ -950,3 +950,82 @@ h1, h2, h3 {
     cursor: pointer;
     text-decoration: underline;
 }
+
+/* JS uploader (import page) */
+.dropzone {
+    margin: var(--space-md) 0;
+    padding: var(--space-xl);
+    border: 2px dashed var(--c-border);
+    border-radius: var(--radius-md);
+    background: var(--c-surface);
+    color: var(--c-muted);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.dropzone.is-over {
+    border-color: var(--c-accent);
+    background: var(--c-accent-soft);
+    color: var(--c-accent-strong);
+}
+
+.upload-list {
+    list-style: none;
+    margin: var(--space-md) 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+.upload-item {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-sm);
+    background: var(--c-surface);
+}
+.upload-item-name {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.upload-item-size {
+    flex: 0 0 auto;
+    color: var(--c-muted);
+    font-size: 0.85rem;
+}
+.upload-item-status {
+    flex: 0 0 auto;
+    font-size: 0.85rem;
+    color: var(--c-muted);
+}
+.upload-item-remove {
+    flex: 0 0 auto;
+    border: none;
+    background: none;
+    color: var(--c-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 var(--space-xs);
+}
+.upload-item-remove:hover { color: var(--c-danger); }
+.upload-item.upload-uploading { border-color: var(--c-info); }
+.upload-item.upload-uploading .upload-item-status { color: var(--c-info); }
+.upload-item.upload-done { border-color: var(--c-success); }
+.upload-item.upload-done .upload-item-status { color: var(--c-success); }
+.upload-item.upload-skipped .upload-item-status { color: var(--c-warn); }
+.upload-item.upload-error { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.upload-item.upload-error .upload-item-status { color: var(--c-danger); }
+
+.upload-summary {
+    margin: var(--space-md) 0;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--c-border);
+}
+.upload-summary-ok { border-color: var(--c-success); background: #eef7ee; }
+.upload-summary-error { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.upload-summary-link { margin-left: var(--space-sm); font-weight: 600; }
