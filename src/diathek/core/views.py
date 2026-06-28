@@ -909,6 +909,9 @@ def _immich_updates(request, image):
             date_latest=parsed.latest,
             date_precision=parsed.precision,
             date_todo=False,
+            # Keep the exact time+offset so the export round-trips it; clear any
+            # stale value when the photo only carries a day.
+            immich_capture_datetime=meta.capture_datetime or "",
         )
     if meta.latitude is not None:
         updates.update(

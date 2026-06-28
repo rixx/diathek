@@ -45,6 +45,32 @@ def test_build_args_for_image_reflects_full_model():
     assert any(arg.startswith("-DateTimeOriginal=") for arg in args)
 
 
+def test_build_args_bakes_immich_capture_time_and_offset():
+    image = ImageFactory(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    args = build_args_for_image(image)
+
+    assert "-DateTimeOriginal=1987:06:15 14:30:00" in args
+    assert "-OffsetTimeOriginal=+02:00" in args
+
+
+def test_build_args_falls_back_to_noon_when_date_edited_away_from_capture():
+    image = ImageFactory(
+        date_earliest=datetime.date(1990, 1, 1),
+        date_latest=datetime.date(1990, 1, 1),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    args = build_args_for_image(image)
+
+    assert "-DateTimeOriginal=1990:01:01 12:00:00" in args
+    assert not any(arg.startswith("-OffsetTime") for arg in args)
+
+
 def test_build_args_for_image_without_place_has_no_city_or_gps():
     image = ImageFactory(place=None)
 

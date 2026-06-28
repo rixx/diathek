@@ -37,6 +37,58 @@ def test_date_absent_omits_both_tags():
     assert not any(arg.startswith("-CreateDate=") for arg in args)
 
 
+def test_capture_datetime_writes_exact_time_and_offset_tags():
+    capture = datetime.datetime(
+        1987, 6, 15, 14, 30, 45, tzinfo=datetime.timezone(datetime.timedelta(hours=2))
+    )
+
+    args = build_exiftool_args(date_representative=DATE, capture_datetime=capture)
+
+    assert "-DateTimeOriginal=1987:06:15 14:30:45" in args
+    assert "-CreateDate=1987:06:15 14:30:45" in args
+    assert "-OffsetTimeOriginal=+02:00" in args
+    assert "-OffsetTimeDigitized=+02:00" in args
+    assert "-OffsetTime=+02:00" in args
+    # The exact time wins; the day-precision noon fallback is not emitted.
+    assert "-DateTimeOriginal=2026:04:05 12:00:00" not in args
+
+
+def test_capture_datetime_in_utc_writes_zero_offset():
+    capture = datetime.datetime(1987, 6, 15, 12, 0, 0, tzinfo=datetime.UTC)
+
+    args = build_exiftool_args(capture_datetime=capture)
+
+    assert "-DateTimeOriginal=1987:06:15 12:00:00" in args
+    assert "-OffsetTimeOriginal=+00:00" in args
+
+
+def test_capture_datetime_with_negative_offset():
+    capture = datetime.datetime(
+        2001, 7, 4, 9, 5, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=-5))
+    )
+
+    args = build_exiftool_args(capture_datetime=capture)
+
+    assert "-DateTimeOriginal=2001:07:04 09:05:00" in args
+    assert "-OffsetTimeOriginal=-05:00" in args
+
+
+def test_naive_capture_datetime_omits_offset_tags():
+    capture = datetime.datetime(1987, 6, 15, 14, 30, 0)
+
+    args = build_exiftool_args(capture_datetime=capture)
+
+    assert "-DateTimeOriginal=1987:06:15 14:30:00" in args
+    assert not any(arg.startswith("-OffsetTime") for arg in args)
+
+
+def test_capture_datetime_none_falls_back_to_noon():
+    args = build_exiftool_args(date_representative=DATE, capture_datetime=None)
+
+    assert "-DateTimeOriginal=2026:04:05 12:00:00" in args
+    assert not any(arg.startswith("-OffsetTime") for arg in args)
+
+
 def test_caption_from_date_display_only():
     args = build_exiftool_args(date_display="Sommer 1965")
 

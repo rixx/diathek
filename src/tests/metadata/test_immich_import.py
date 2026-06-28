@@ -57,9 +57,118 @@ def test_extract_pulls_date_and_coords():
     meta = extract_immich_metadata(asset)
 
     assert meta == ImmichMetadata(
-        date="1987-06-15", latitude=Decimal("52.520007"), longitude=Decimal("13.404954")
+        date="1987-06-15",
+        latitude=Decimal("52.520007"),
+        longitude=Decimal("13.404954"),
+        capture_datetime="1987-06-15T12:00:00+00:00",
     )
     assert not meta.is_empty
+
+
+def test_extract_keeps_offset_embedded_in_timestamp():
+    asset = {"exifInfo": {"dateTimeOriginal": "1987-06-15T14:30:00+02:00"}}
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.date == "1987-06-15"
+    assert meta.capture_datetime == "1987-06-15T14:30:00+02:00"
+
+
+def test_extract_applies_named_timezone_to_utc_instant():
+    # Immich serialises the instant in UTC and keeps the zone separately; the
+    # local wall clock is 14:30+02:00, so the local day is still the 15th.
+    asset = {
+        "exifInfo": {
+            "dateTimeOriginal": "1987-06-15T12:30:00.000Z",
+            "timeZone": "Europe/Berlin",
+        }
+    }
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.date == "1987-06-15"
+    assert meta.capture_datetime == "1987-06-15T14:30:00+02:00"
+
+
+def test_extract_timezone_can_shift_the_local_day():
+    # 23:00Z in Berlin (+01:00 in January) is 00:00 the next local day.
+    asset = {
+        "exifInfo": {
+            "dateTimeOriginal": "1990-01-02T23:00:00.000Z",
+            "timeZone": "Europe/Berlin",
+        }
+    }
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.date == "1990-01-03"
+    assert meta.capture_datetime == "1990-01-03T00:00:00+01:00"
+
+
+def test_extract_accepts_offset_style_timezone():
+    asset = {
+        "exifInfo": {
+            "dateTimeOriginal": "1987-06-15T12:30:00.000Z",
+            "timeZone": "UTC+2",
+        }
+    }
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.capture_datetime == "1987-06-15T14:30:00+02:00"
+
+
+def test_extract_accepts_padded_negative_offset_timezone():
+    asset = {
+        "exifInfo": {
+            "dateTimeOriginal": "1987-06-15T12:30:00.000Z",
+            "timeZone": "UTC-05:30",
+        }
+    }
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.capture_datetime == "1987-06-15T07:00:00-05:30"
+
+
+def test_extract_plain_utc_timezone_keeps_offset_zero():
+    asset = {
+        "exifInfo": {"dateTimeOriginal": "1987-06-15T12:30:00.000Z", "timeZone": "UTC"}
+    }
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.capture_datetime == "1987-06-15T12:30:00+00:00"
+
+
+def test_extract_ignores_unusable_timezone_and_keeps_utc():
+    asset = {
+        "exifInfo": {
+            "dateTimeOriginal": "1987-06-15T12:30:00.000Z",
+            "timeZone": "Not/AZone",
+        }
+    }
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.capture_datetime == "1987-06-15T12:30:00+00:00"
+
+
+def test_extract_naive_timestamp_is_treated_as_utc():
+    asset = {"exifInfo": {"dateTimeOriginal": "1987-06-15T12:30:00"}}
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.capture_datetime == "1987-06-15T12:30:00+00:00"
+
+
+def test_extract_shaped_but_invalid_date_yields_no_capture():
+    asset = {"exifInfo": {"dateTimeOriginal": "1987-13-45T00:00:00Z"}}
+
+    meta = extract_immich_metadata(asset)
+
+    assert meta.date == "1987-13-45"
+    assert meta.capture_datetime is None
 
 
 def test_extract_handles_missing_exif_block():

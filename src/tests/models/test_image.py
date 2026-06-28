@@ -111,6 +111,7 @@ def test_compute_immich_signature_unchanged_without_coords():
                 "content_hash": image.content_hash,
                 "place": None,
                 "date": None,
+                "capture_datetime": None,
                 "date_display": image.date_display,
                 "description": image.description,
                 "needs_flip": image.needs_flip,
@@ -147,6 +148,74 @@ def test_image_date_representative_returns_none_when_any_bound_missing():
 
 
 @pytest.mark.django_db
+def test_effective_capture_datetime_returned_when_day_matches():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    capture = image.effective_capture_datetime()
+
+    assert capture == datetime.datetime(
+        1987, 6, 15, 14, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=2))
+    )
+
+
+@pytest.mark.django_db
+def test_effective_capture_datetime_ignored_when_date_edited_away():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1990, 1, 1),
+        date_latest=datetime.date(1990, 1, 1),
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    assert image.effective_capture_datetime() is None
+
+
+@pytest.mark.django_db
+def test_effective_capture_datetime_none_when_unset_or_no_date():
+    no_value = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="",
+    )
+    no_date = ImageFactory.build(
+        date_earliest=None,
+        date_latest=None,
+        immich_capture_datetime="1987-06-15T14:30:00+02:00",
+    )
+
+    assert no_value.effective_capture_datetime() is None
+    assert no_date.effective_capture_datetime() is None
+
+
+@pytest.mark.django_db
+def test_effective_capture_datetime_none_when_malformed():
+    image = ImageFactory.build(
+        date_earliest=datetime.date(1987, 6, 15),
+        date_latest=datetime.date(1987, 6, 15),
+        immich_capture_datetime="not-a-datetime",
+    )
+
+    assert image.effective_capture_datetime() is None
+
+
+@pytest.mark.django_db
+def test_compute_immich_signature_changes_with_capture_datetime():
+    kwargs = {
+        "date_earliest": datetime.date(1987, 6, 15),
+        "date_latest": datetime.date(1987, 6, 15),
+    }
+    without = ImageFactory.build(immich_capture_datetime="", **kwargs)
+    with_time = ImageFactory.build(
+        immich_capture_datetime="1987-06-15T14:30:00+02:00", **kwargs
+    )
+
+    assert with_time.compute_immich_signature() != without.compute_immich_signature()
+
+
+@pytest.mark.django_db
 def test_compute_immich_signature_is_deterministic():
     place = PlaceFactory()
     kwargs = {
@@ -174,6 +243,7 @@ def test_compute_immich_signature_uses_none_when_unset():
                 "content_hash": image.content_hash,
                 "place": None,
                 "date": None,
+                "capture_datetime": None,
                 "date_display": image.date_display,
                 "description": image.description,
                 "needs_flip": image.needs_flip,

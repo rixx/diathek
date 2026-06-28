@@ -96,6 +96,38 @@ def test_apply_sets_date_and_coords_and_clears_todos(auth_client, image, fake_as
 
 
 @pytest.mark.django_db
+def test_apply_stores_capture_datetime_with_timezone(auth_client, image, fake_asset):
+    fake_asset["asset"] = {
+        "exifInfo": {
+            "dateTimeOriginal": "1987-06-15T12:30:00.000Z",
+            "timeZone": "Europe/Berlin",
+        }
+    }
+
+    _apply(auth_client, image, {"immich_link": LINK})
+
+    image.refresh_from_db()
+    assert image.date_earliest == datetime.date(1987, 6, 15)
+    assert image.immich_capture_datetime == "1987-06-15T14:30:00+02:00"
+
+
+@pytest.mark.django_db
+def test_apply_clears_stale_capture_datetime_when_time_unusable(
+    auth_client, image, fake_asset
+):
+    image.immich_capture_datetime = "1980-01-01T00:00:00+00:00"
+    image.save(user=auth_client.user)
+    # Valid day, but the time portion cannot be parsed: no exact time to keep.
+    fake_asset["asset"] = {"exifInfo": {"dateTimeOriginal": "1987-06-15T25:99:99Z"}}
+
+    _apply(auth_client, image, {"immich_link": LINK})
+
+    image.refresh_from_db()
+    assert image.date_earliest == datetime.date(1987, 6, 15)
+    assert image.immich_capture_datetime == ""
+
+
+@pytest.mark.django_db
 def test_apply_writes_audit_log(auth_client, image, fake_asset):
     _apply(auth_client, image, {"immich_link": LINK})
 

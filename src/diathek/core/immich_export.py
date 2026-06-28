@@ -32,6 +32,7 @@ def build_args_for_image(image):
         latitude, longitude = None, None
     return build_exiftool_args(
         date_representative=image.date_representative(),
+        capture_datetime=image.effective_capture_datetime(),
         date_display=image.date_display,
         description=image.description,
         place_name=place.name if place else None,

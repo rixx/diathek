@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -92,6 +92,11 @@ class Image(BaseModel):
     edit_todo = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
 
+    # Exact local capture timestamp (ISO 8601, with offset) pulled from an Immich
+    # photo. Kept alongside the day-precision date fields so the export can bake
+    # back the original time and timezone; ignored once the date is edited away
+    # from it. See ``immich_export.build_args_for_image``.
+    immich_capture_datetime = models.CharField(max_length=40, blank=True)
     immich_asset_id = models.CharField(max_length=64, blank=True)
     immich_checksum = models.CharField(max_length=64, blank=True)
     immich_uploaded_at = models.DateTimeField(null=True, blank=True)
@@ -158,15 +163,38 @@ class Image(BaseModel):
         span = (self.date_latest - self.date_earliest).days
         return self.date_earliest + timedelta(days=span // 2)
 
+    def effective_capture_datetime(self):
+        """The exact Immich capture timestamp, only while it still fits the date.
+
+        Returns the parsed timezone-aware ``datetime`` from
+        :attr:`immich_capture_datetime` when its day matches the current
+        representative date, otherwise ``None``. Editing the date away from the
+        pulled value (or never having pulled one) falls back to noon on export.
+        """
+        if not self.immich_capture_datetime:
+            return None
+        rep = self.date_representative()
+        if rep is None:
+            return None
+        try:
+            parsed = datetime.fromisoformat(self.immich_capture_datetime)
+        except ValueError:
+            return None
+        if parsed.date() != rep:
+            return None
+        return parsed
+
     def compute_immich_signature(self):
         import hashlib
         import json
 
         rep = self.date_representative()
+        capture = self.effective_capture_datetime()
         payload = {
             "content_hash": self.content_hash,
             "place": self.place.name if self.place_id else None,
             "date": rep.isoformat() if rep else None,
+            "capture_datetime": capture.isoformat() if capture else None,
             "date_display": self.date_display,
             "description": self.description,
             "needs_flip": self.needs_flip,
