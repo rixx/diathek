@@ -116,18 +116,6 @@ worker *args:
 prune-tasks *args:
     {{ python }} manage.py prune_db_task_results {{ args }}
 
-# Export metadata for a box (or all boxes) to a JSON file
-[group('operations')]
-[working-directory("src")]
-export *args:
-    {{ python }} manage.py export_metadata {{ args }}
-
-# Apply metadata to local scan files via exiftool (local-only)
-[group('operations')]
-[working-directory("src")]
-apply *args:
-    {{ python }} manage.py apply_metadata {{ args }}
-
 # Run the test suite
 [group('tests')]
 [positional-arguments]
