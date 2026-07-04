@@ -1,3 +1,4 @@
+import zipfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,10 +9,18 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Case, Count, F, Max, Q, When
-from django.http import HttpResponse, HttpResponseForbidden, JsonResponse, QueryDict
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseForbidden,
+    JsonResponse,
+    QueryDict,
+    StreamingHttpResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_http_methods, require_POST
 from PIL import UnidentifiedImageError
 
@@ -677,6 +686,63 @@ def box_grid(request, box_uuid):
             "recent_dates": Image.recent_date_displays(),
         },
     )
+
+
+class _ZipStreamBuffer:
+    """Unseekable write target for ZipFile whose bytes can be drained as they
+    accumulate, so a zip can be streamed without ever holding it in full.
+
+    Deliberately has no ``tell``/``seek``: that makes ZipFile take its
+    unseekable-output path (data descriptors instead of header backpatching).
+    """
+
+    def __init__(self):
+        self._pending = bytearray()
+
+    def write(self, data):
+        self._pending += data
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def drain(self):
+        chunk = bytes(self._pending)
+        self._pending.clear()
+        return chunk
+
+
+def _stream_zip(images):
+    buffer = _ZipStreamBuffer()
+    # Originals are already-compressed JPEGs; ZIP_STORED skips pointless deflate.
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+        for image in images:
+            info = zipfile.ZipInfo(
+                image.filename,
+                date_time=timezone.localtime(image.created_at).timetuple()[:6],
+            )
+            info.external_attr = 0o644 << 16
+            with image.image.open("rb") as source, archive.open(info, "w") as target:
+                while chunk := source.read(1024 * 1024):
+                    target.write(chunk)
+                    yield buffer.drain()
+            yield buffer.drain()
+    yield buffer.drain()
+
+
+@login_required
+def box_download(request, box_uuid):
+    box = get_object_or_404(Box, uuid=box_uuid, archived=False)
+    images = list(box.images.exclude(image="").order_by("sequence_in_box"))
+    if not images:
+        raise Http404("Keine Originaldateien in dieser Box.")
+    response = StreamingHttpResponse(
+        _stream_zip(images), content_type="application/zip"
+    )
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True, filename=f"{box.name}.zip"
+    )
+    return response
 
 
 # Sentinel distinguishing "capture_time absent from the request" (leave as-is)
