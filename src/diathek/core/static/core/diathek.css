@@ -1020,6 +1020,31 @@ h1, h2, h3 {
 .upload-item.upload-error { border-color: var(--c-danger); background: var(--c-danger-soft); }
 .upload-item.upload-error .upload-item-status { color: var(--c-danger); }
 
+.upload-item-thumb {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 3rem;
+    height: 3rem;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+}
+.upload-item-source {
+    flex: 0 0 auto;
+    color: var(--c-muted);
+    font-size: 0.85rem;
+}
+.upload-item.upload-matched { border-color: var(--c-info); }
+.upload-item.upload-matched .upload-item-status { color: var(--c-info); }
+.upload-item.upload-unmatched .upload-item-status,
+.upload-item.upload-ambiguous .upload-item-status { color: var(--c-warn); }
+
+.immich-edit-recent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
 .upload-summary {
     margin: var(--space-md) 0;
     padding: var(--space-sm) var(--space-md);

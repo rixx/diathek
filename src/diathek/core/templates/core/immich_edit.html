@@ -1,0 +1,60 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Immich-Bearbeiten · diathek{% endblock %}
+
+{% block content %}
+<h1>Immich-Bearbeiten</h1>
+
+{% if blocker %}
+<p class="error">{{ blocker }}</p>
+{% else %}
+<p>⁂ Ersetze bereits in Immich liegende Fotos durch bearbeitete Versionen:
+Link zum Album (oder zu einzelnen Fotos) einfügen, die bearbeiteten Dateien
+mit unverändertem Dateinamen auswählen, zuordnen lassen und ersetzen. Alben,
+Metadaten und geteilte Links bleiben erhalten; die alten Originale wandern in
+den Immich-Papierkorb.</p>
+
+<form id="immich-edit-form" novalidate
+      data-prepare-url="{% url 'immich_edit_prepare' %}"
+      data-file-url-template="{% url 'immich_edit_file' session_id='00000000-0000-0000-0000-000000000000' %}">
+    {% csrf_token %}
+
+    <p>
+        <label for="immich-edit-links">Album- oder Foto-Links</label>
+        <textarea id="immich-edit-links" name="links" rows="2"
+                  placeholder="https://…/albums/…">{{ recent_links.0.link }}</textarea>
+    </p>
+    {% if recent_links %}
+    <p class="immich-edit-recent">
+        <span>⁂ Zuletzt verwendet:</span>
+        {% for entry in recent_links %}
+        <button type="button" class="btn btn-secondary" data-recent-link="{{ entry.link }}">
+            {{ entry.label|default:entry.link }}
+        </button>
+        {% endfor %}
+    </p>
+    {% endif %}
+
+    <p>
+        <label for="immich-edit-files">Bearbeitete Dateien</label>
+        <input id="immich-edit-files" type="file" multiple accept="image/*">
+    </p>
+
+    <div class="dropzone" data-dropzone hidden>
+        Dateien hierher ziehen oder klicken zum Auswählen
+    </div>
+
+    <ol class="upload-list" data-upload-list></ol>
+    <p class="upload-summary" data-upload-summary hidden></p>
+
+    <button type="submit" class="btn btn-primary" data-edit-submit>Zuordnen</button>
+</form>
+
+<noscript><p>⁂ Diese Seite benötigt JavaScript.</p></noscript>
+{% endif %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'core/immich_edit.js' %}" defer></script>
+{% endblock %}

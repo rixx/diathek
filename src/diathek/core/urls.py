@@ -32,6 +32,22 @@ urlpatterns = [
         views.box_immich_retry,
         name="box_immich_retry",
     ),
+    path("immich/bearbeiten/", views.immich_edit_page, name="immich_edit"),
+    path(
+        "immich/bearbeiten/vorbereiten/",
+        views.immich_edit_prepare,
+        name="immich_edit_prepare",
+    ),
+    path(
+        "immich/bearbeiten/thumbnail/<uuid:asset_id>/",
+        views.immich_edit_thumbnail,
+        name="immich_edit_thumbnail",
+    ),
+    path(
+        "immich/bearbeiten/<uuid:session_id>/datei/",
+        views.immich_edit_file,
+        name="immich_edit_file",
+    ),
     path("orte/", views.place_list, name="place_list"),
     path("orte/<int:pk>/", views.place_set_coords, name="place_set_coords"),
     path("konto/", views.account_settings, name="account_settings"),

@@ -45,7 +45,7 @@ def finalize_box(box_id, user_id):
             try:
                 checksum = sha1_hex(tmp)
                 result = client.upload_asset(
-                    file_path=str(tmp),
+                    file_bytes=tmp.read_bytes(),
                     filename=image.filename,
                     device_asset_id=str(image.uuid),
                     device_id="diathek",

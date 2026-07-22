@@ -22,6 +22,7 @@ _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 # Both `/photos/<id>` (direct link) and `/albums/<id>/photos/<id>` (album link)
 # put the asset id straight after the final `/photos/` segment.
 _PHOTOS_RE = re.compile(rf"/photos/({_UUID})")
+_ALBUMS_RE = re.compile(rf"/albums/({_UUID})")
 _BARE_RE = re.compile(rf"^\s*({_UUID})\s*$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}")
 # Immich's ``timeZone`` field is either an IANA name (``Europe/Berlin``) or a
@@ -44,6 +45,24 @@ def parse_immich_asset_id(text: str) -> str | None:
     match = _PHOTOS_RE.search(text)
     if match is None:
         match = _BARE_RE.match(text)
+    if match is None:
+        return None
+    return match.group(1).lower()
+
+
+def parse_immich_album_id(text: str) -> str | None:
+    """⁂ Return the album UUID referenced by ``text`` or ``None``.
+
+    Accepts full Immich album links such as ``https://host/albums/<album>``.
+    A bare UUID is *not* accepted — it is indistinguishable from an asset id
+    and stays reserved for :func:`parse_immich_asset_id`. A link that also
+    carries a ``/photos/`` segment still matches here, so callers that accept
+    both link kinds must check for an asset reference first (the photo link
+    is the more specific one).
+    """
+    if not text:
+        return None
+    match = _ALBUMS_RE.search(text)
     if match is None:
         return None
     return match.group(1).lower()

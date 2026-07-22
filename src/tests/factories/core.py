@@ -1,6 +1,14 @@
 import factory
 
-from diathek.core.models import Box, DriverState, Image, InviteCode, Place, User
+from diathek.core.models import (
+    Box,
+    DriverState,
+    Image,
+    ImmichEditSession,
+    InviteCode,
+    Place,
+    User,
+)
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -72,3 +80,11 @@ class DriverStateFactory(factory.django.DjangoModelFactory):
         django_get_or_create = ("pk",)
 
     pk = 1
+
+
+class ImmichEditSessionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ImmichEditSession
+
+    user = factory.SubFactory(UserFactory, immich_api_key="api-key-123")
+    data = factory.LazyFunction(list)

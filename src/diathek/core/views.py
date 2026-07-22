@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Case, Count, F, Max, Q, When
@@ -38,14 +39,24 @@ from diathek.core.metadata import (
     parse_capture_time,
     parse_metadata_payload,
 )
-from diathek.core.models import Box, DriverState, Image, ImmichState, InviteCode, Place
+from diathek.core.models import (
+    Box,
+    DriverState,
+    Image,
+    ImmichEditSession,
+    ImmichState,
+    InviteCode,
+    Place,
+)
 from diathek.core.tasks import finalize_box
 from diathek.core.thumbnails import build_assets
 from diathek.metadata import dateparse
 from diathek.metadata.coords import parse_coordinates
 from diathek.metadata.description import stamp_description
+from diathek.metadata.immich_edit import extract_edit_metadata, match_edit_filenames
 from diathek.metadata.immich_import import (
     extract_immich_metadata,
+    parse_immich_album_id,
     parse_immich_asset_id,
 )
 
@@ -1422,6 +1433,289 @@ def box_immich_retry(request, box_uuid):
     finalize_box.enqueue(box.id, request.user.id)
     box.refresh_from_db()
     return _render_immich_status(request, box)
+
+
+IMMICH_EDIT_RECENT_LIMIT = 5
+IMMICH_EDIT_RECENT_TTL = 60 * 60 * 24 * 30
+IMMICH_EDIT_TERMINAL = ("done", "error")
+
+
+def _immich_edit_blocker(user):
+    """⁂ Return the German reason the edit round-trip is unavailable, or None."""
+    if not user.has_immich_configured:
+        return "Bitte zuerst einen Immich-API-Schlüssel hinterlegen."
+    if not settings.IMMICH_BASE_URL:
+        return "Immich-Server ist nicht konfiguriert."
+    return None
+
+
+def _immich_edit_recent_key(user):
+    return f"immich-edit-links:{user.pk}"
+
+
+def _remember_immich_edit_link(user, link, label):
+    """⁂ Prepend a used album link to the user's recent-links list (cache only).
+
+    Purely a convenience so the page can prefill the link field next time;
+    losing the list (cache eviction, restart) costs nothing.
+    """
+    entries = [
+        entry
+        for entry in cache.get(_immich_edit_recent_key(user)) or []
+        if entry["link"] != link
+    ]
+    entries.insert(0, {"link": link, "label": label})
+    cache.set(
+        _immich_edit_recent_key(user),
+        entries[:IMMICH_EDIT_RECENT_LIMIT],
+        IMMICH_EDIT_RECENT_TTL,
+    )
+
+
+@login_required
+def immich_edit_page(request):
+    return render(
+        request,
+        "core/immich_edit.html",
+        {
+            "blocker": _immich_edit_blocker(request.user),
+            "recent_links": cache.get(_immich_edit_recent_key(request.user)) or [],
+        },
+    )
+
+
+class _ImmichEditError(Exception):
+    """⁂ User-facing error raised while resolving the pasted Immich links."""
+
+
+def _immich_edit_sources(client, lines):
+    """⁂ Resolve pasted link lines to source asset payloads.
+
+    Each line is either a photo link (fetched individually) or an album link
+    (contributes all album assets). Returns ``(sources, album_links)`` where
+    ``album_links`` pairs each album line with its album name, for the
+    recent-links list. Raises :class:`_ImmichEditError` for unparseable lines
+    and lets :class:`ImmichError` bubble for failed requests.
+    """
+    sources = []
+    album_links = []
+    for line in lines:
+        asset_id = parse_immich_asset_id(line)
+        if asset_id is not None:
+            sources.append(client.get_asset(asset_id))
+            continue
+        album_id = parse_immich_album_id(line)
+        if album_id is None:
+            raise _ImmichEditError(f"⁂ Kein gültiger Immich-Link: {line}")
+        album = client.get_album(album_id)
+        sources.extend(album.get("assets") or [])
+        album_links.append((line, album.get("albumName") or ""))
+    return sources, album_links
+
+
+@login_required
+@require_POST
+def immich_edit_prepare(request):
+    blocker = _immich_edit_blocker(request.user)
+    if blocker is not None:
+        return JsonResponse({"error": blocker}, status=403)
+
+    lines = [
+        line.strip()
+        for line in request.POST.get("links", "").splitlines()
+        if line.strip()
+    ]
+    if not lines:
+        return JsonResponse(
+            {"error": "⁂ Bitte einen Album- oder Foto-Link angeben."}, status=400
+        )
+
+    filenames = request.POST.getlist("filenames")
+    if not filenames:
+        return JsonResponse({"error": "⁂ Keine Dateinamen angegeben."}, status=400)
+    duplicates = sorted({name for name in filenames if filenames.count(name) > 1})
+    if duplicates:
+        return JsonResponse(
+            {"error": "Doppelte Dateinamen im Upload: " + ", ".join(duplicates)},
+            status=400,
+        )
+
+    client = ImmichClient(settings.IMMICH_BASE_URL, request.user.immich_api_key)
+    try:
+        sources, album_links = _immich_edit_sources(client, lines)
+    except _ImmichEditError as err:
+        return JsonResponse({"error": str(err)}, status=400)
+    except ImmichError:
+        return JsonResponse(
+            {"error": "⁂ Immich-Anfrage fehlgeschlagen. Stimmen die Links?"}, status=400
+        )
+
+    matched, unmatched, ambiguous = match_edit_filenames(filenames, sources)
+    if not matched:
+        return JsonResponse(
+            {
+                "error": "⁂ Keine der Dateien passt zu einem Immich-Foto.",
+                "unmatched": unmatched,
+                "ambiguous": ambiguous,
+            },
+            status=400,
+        )
+
+    items = [
+        {
+            "filename": filename,
+            "source_asset_id": source["id"],
+            "source_filename": source.get("originalFileName") or "",
+            "metadata": extract_edit_metadata(source),
+            "item_state": "pending",
+            "new_asset_id": None,
+            "error": "",
+        }
+        for filename, source in matched.items()
+    ]
+    session = ImmichEditSession.objects.create(user=request.user, data=items)
+
+    for link, label in album_links:
+        _remember_immich_edit_link(request.user, link, label)
+
+    return JsonResponse(
+        {
+            "session_id": str(session.pk),
+            "items": [
+                {
+                    "filename": item["filename"],
+                    "source_filename": item["source_filename"],
+                    "source_date": extract_immich_metadata(
+                        matched[item["filename"]]
+                    ).date,
+                    "thumbnail_url": reverse(
+                        "immich_edit_thumbnail", args=[item["source_asset_id"]]
+                    ),
+                }
+                for item in items
+            ],
+            "unmatched": unmatched,
+            "ambiguous": ambiguous,
+        }
+    )
+
+
+@login_required
+def immich_edit_thumbnail(request, asset_id):
+    """⁂ Stream an Immich thumbnail with the user's key (the browser has none)."""
+    if _immich_edit_blocker(request.user) is not None:
+        return HttpResponse(status=403)
+    client = ImmichClient(settings.IMMICH_BASE_URL, request.user.immich_api_key)
+    try:
+        data, content_type = client.get_thumbnail(str(asset_id))
+    except ImmichError:
+        return HttpResponse(status=502)
+    return HttpResponse(data, content_type=content_type)
+
+
+def _immich_edit_item(items, filename):
+    for entry in items:
+        if entry["filename"] == filename:
+            return entry
+    return None
+
+
+def _immich_edit_replace(client, item, file_bytes, filename):
+    """⁂ Run the per-file pipeline: upload → copy relations → re-apply metadata
+    → trash the source. Mutates ``item`` to its terminal state.
+
+    When the upload reports a duplicate of the source itself, the edited file
+    is byte-identical to the original — copy and trash are skipped. The source
+    is only ever trashed after copy and update succeeded; on failure it stays
+    put and the item records the error.
+    """
+    try:
+        now = timezone.now().isoformat()
+        result = client.upload_asset(
+            file_bytes=file_bytes,
+            filename=filename,
+            device_asset_id=f"diathek-edit-{item['source_asset_id']}",
+            device_id="diathek",
+            file_created_at=now,
+            file_modified_at=now,
+        )
+        new_id = result["id"]
+        if new_id != item["source_asset_id"]:
+            client.copy_asset(item["source_asset_id"], new_id)
+            if item["metadata"]:
+                client.update_asset(new_id, **item["metadata"])
+            client.delete_assets([item["source_asset_id"]])
+        item.update(item_state="done", new_asset_id=new_id, error="")
+    except ImmichError as err:
+        item.update(item_state="error", error=str(err))
+
+
+def _immich_edit_summary(items):
+    return {
+        "done": sum(1 for entry in items if entry["item_state"] == "done"),
+        "error": sum(1 for entry in items if entry["item_state"] == "error"),
+    }
+
+
+def _immich_edit_file_response(item, *, completed, summary):
+    return JsonResponse(
+        {
+            "filename": item["filename"],
+            "state": item["item_state"],
+            "error": item["error"],
+            "completed": completed,
+            "summary": summary,
+        }
+    )
+
+
+@login_required
+@require_POST
+def immich_edit_file(request, session_id):
+    blocker = _immich_edit_blocker(request.user)
+    if blocker is not None:
+        return JsonResponse({"error": blocker}, status=403)
+
+    uploaded = request.FILES.get("file")
+    if uploaded is None:
+        return JsonResponse({"error": "⁂ Keine Datei angegeben."}, status=400)
+
+    session = ImmichEditSession.objects.filter(pk=session_id, user=request.user).first()
+    if session is None:
+        return JsonResponse({"error": "⁂ Sitzung nicht gefunden."}, status=404)
+    item = _immich_edit_item(session.data, uploaded.name)
+    if item is None:
+        return JsonResponse(
+            {"error": "⁂ Datei gehört nicht zu dieser Sitzung."}, status=400
+        )
+
+    if item["item_state"] != "done":
+        # ⁂ Network work runs outside any transaction so the sqlite write lock
+        # is not held across slow Immich requests.
+        client = ImmichClient(settings.IMMICH_BASE_URL, request.user.immich_api_key)
+        _immich_edit_replace(client, item, uploaded.read(), uploaded.name)
+
+    with transaction.atomic():
+        locked = (
+            ImmichEditSession.objects.select_for_update()
+            .filter(pk=session_id, user=request.user)
+            .first()
+        )
+        if locked is None:
+            # ⁂ Session vanished mid-flight (concurrent completion or prune);
+            # the Immich-side work is done, so still report this file's result.
+            return _immich_edit_file_response(item, completed=True, summary=None)
+        items = locked.data
+        stored = _immich_edit_item(items, uploaded.name)
+        stored.update(item)
+        if all(entry["item_state"] in IMMICH_EDIT_TERMINAL for entry in items):
+            summary = _immich_edit_summary(items)
+            locked.delete()
+            return _immich_edit_file_response(stored, completed=True, summary=summary)
+        locked.state = ImmichEditSession.STATE_RUNNING
+        locked.data = items
+        locked.save(update_fields=["state", "data"])
+    return _immich_edit_file_response(item, completed=False, summary=None)
 
 
 @login_required

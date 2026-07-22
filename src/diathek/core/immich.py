@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import urllib3
 
@@ -61,7 +60,7 @@ class ImmichClient:
     def upload_asset(
         self,
         *,
-        file_path,
+        file_bytes,
         filename,
         device_asset_id,
         device_id,
@@ -69,8 +68,6 @@ class ImmichClient:
         file_modified_at,
         checksum=None,
     ):
-        file_bytes = Path(file_path).read_bytes()
-
         fields = {
             "assetData": (filename, file_bytes, "application/octet-stream"),
             "deviceAssetId": device_asset_id,
@@ -82,6 +79,51 @@ class ImmichClient:
         return self._request(
             "POST", "/assets", fields=fields, extra_headers=extra_headers
         )
+
+    def get_album(self, album_id):
+        return self._request("GET", f"/albums/{album_id}")
+
+    def copy_asset(self, source_id, target_id):
+        # ⁂ Copies the source's relationships onto the target. Faces have no
+        # copy flag (and crops would invalidate their boxes anyway); descriptive
+        # metadata is re-applied separately via update_asset, sidecar is just a
+        # harmless bonus.
+        return self._request(
+            "PUT",
+            "/assets/copy",
+            json_body={
+                "sourceId": source_id,
+                "targetId": target_id,
+                "albums": True,
+                "sharedLinks": True,
+                "stack": True,
+                "favorite": True,
+                "sidecar": True,
+            },
+        )
+
+    def update_asset(self, asset_id, **fields):
+        return self._request("PUT", f"/assets/{asset_id}", json_body=fields)
+
+    def delete_assets(self, asset_ids):
+        # ⁂ Soft-delete to Immich's trash only — force (permanent) is never sent.
+        return self._request(
+            "DELETE", "/assets", json_body={"ids": list(asset_ids), "force": False}
+        )
+
+    def get_thumbnail(self, asset_id):
+        """⁂ Fetch an asset's thumbnail; returns ``(bytes, content_type)``."""
+        resp = self.pool.request(
+            "GET",
+            f"{self.api_root}/assets/{asset_id}/thumbnail",
+            headers={"x-api-key": self.api_key},
+        )
+        if resp.status >= 400:
+            raise ImmichError(
+                f"⁂ Immich thumbnail request failed with status {resp.status}",
+                status=resp.status,
+            )
+        return resp.data, resp.headers.get("content-type", "image/jpeg")
 
     def get_or_create_album(self, name):
         albums = self._request("GET", "/albums")

@@ -5,6 +5,7 @@ import pytest
 from diathek.metadata.immich_import import (
     ImmichMetadata,
     extract_immich_metadata,
+    parse_immich_album_id,
     parse_immich_asset_id,
 )
 
@@ -43,6 +44,28 @@ def test_parse_empty_string_returns_none():
 
 def test_parse_garbage_returns_none():
     assert parse_immich_asset_id("https://photos.rixx.de/albums/not-a-uuid") is None
+
+
+def test_parse_album_id_from_album_link():
+    link = "https://photos.rixx.de/albums/FB8973C9-6389-4874-807d-3a02173378eb"
+    assert parse_immich_album_id(link) == "fb8973c9-6389-4874-807d-3a02173378eb"
+
+
+def test_parse_album_id_also_matches_album_photo_link():
+    # A photo-in-album link contains both ids; callers must check for an
+    # asset reference first, since that is the more specific one.
+    assert parse_immich_album_id(ALBUM_LINK) == "fb8973c9-6389-4874-807d-3a02173378eb"
+
+
+def test_parse_album_id_rejects_bare_uuid():
+    # A bare UUID is indistinguishable from an asset id and stays reserved
+    # for parse_immich_asset_id.
+    assert parse_immich_album_id("fb8973c9-6389-4874-807d-3a02173378eb") is None
+
+
+def test_parse_album_id_rejects_empty_and_garbage():
+    assert parse_immich_album_id("") is None
+    assert parse_immich_album_id("https://photos.rixx.de/albums/not-a-uuid") is None
 
 
 def test_extract_pulls_date_and_coords():

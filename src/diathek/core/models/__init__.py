@@ -3,6 +3,7 @@ from diathek.core.models.base import BaseModel
 from diathek.core.models.box import Box, ImmichState
 from diathek.core.models.driver import DriverState
 from diathek.core.models.image import DatePrecision, Image
+from diathek.core.models.immich_edit import ImmichEditSession
 from diathek.core.models.invite import InviteCode
 from diathek.core.models.place import Place
 from diathek.core.models.user import User
@@ -14,6 +15,7 @@ __all__ = [
     "DatePrecision",
     "DriverState",
     "Image",
+    "ImmichEditSession",
     "ImmichState",
     "InviteCode",
     "Place",

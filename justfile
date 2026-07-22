@@ -115,6 +115,7 @@ worker *args:
 [working-directory("src")]
 prune-tasks *args:
     {{ python }} manage.py prune_db_task_results {{ args }}
+    {{ python }} manage.py prune_immich_edit_sessions
 
 # Run the test suite
 [group('tests')]
