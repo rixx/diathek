@@ -83,6 +83,31 @@ class ImmichClient:
     def get_album(self, album_id):
         return self._request("GET", f"/albums/{album_id}")
 
+    def get_album_assets(self, album_id):
+        """⁂ List an album's assets as full DTOs (incl. EXIF).
+
+        Immich v3 removed the ``assets`` list from the album response, so the
+        assets are pulled through the paginated metadata search instead.
+        """
+        assets = []
+        page = 1
+        while page is not None:
+            result = self._request(
+                "POST",
+                "/search/metadata",
+                json_body={
+                    "albumIds": [album_id],
+                    "size": 1000,
+                    "page": page,
+                    "withExif": True,
+                },
+            )
+            payload = result["assets"]
+            assets.extend(payload["items"])
+            next_page = payload.get("nextPage")
+            page = int(next_page) if next_page else None
+        return assets
+
     def copy_asset(self, source_id, target_id):
         # ⁂ Copies the source's relationships onto the target. Faces have no
         # copy flag (and crops would invalidate their boxes anyway); descriptive

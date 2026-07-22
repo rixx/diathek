@@ -1507,8 +1507,10 @@ def _immich_edit_sources(client, lines):
         album_id = parse_immich_album_id(line)
         if album_id is None:
             raise _ImmichEditError(f"⁂ Kein gültiger Immich-Link: {line}")
+        # ⁂ Two calls: the album itself only carries the name (v3 dropped the
+        # embedded asset list), the assets come from the metadata search.
         album = client.get_album(album_id)
-        sources.extend(album.get("assets") or [])
+        sources.extend(client.get_album_assets(album_id))
         album_links.append((line, album.get("albumName") or ""))
     return sources, album_links
 

@@ -241,7 +241,7 @@ def test_request_returns_none_on_empty_body(request_mock, client):
 
 def test_get_album_fetches_by_id_and_returns_payload(request_mock, client):
     request_mock.return_value = json_response(
-        {"id": "album-1", "albumName": "Bearbeiten", "assets": [{"id": "a1"}]}
+        {"id": "album-1", "albumName": "Bearbeiten"}
     )
 
     album = client.get_album("album-1")
@@ -249,7 +249,39 @@ def test_get_album_fetches_by_id_and_returns_payload(request_mock, client):
     args, _ = request_mock.call_args
     assert args == ("GET", "https://immich.example.com/api/albums/album-1")
     assert album["albumName"] == "Bearbeiten"
-    assert album["assets"] == [{"id": "a1"}]
+
+
+def test_get_album_assets_searches_with_exif(request_mock, client):
+    request_mock.return_value = json_response(
+        {"assets": {"items": [{"id": "a1"}, {"id": "a2"}], "nextPage": None}}
+    )
+
+    assets = client.get_album_assets("album-1")
+
+    args, kwargs = request_mock.call_args
+    assert args == ("POST", "https://immich.example.com/api/search/metadata")
+    assert json.loads(kwargs["body"]) == {
+        "albumIds": ["album-1"],
+        "size": 1000,
+        "page": 1,
+        "withExif": True,
+    }
+    assert assets == [{"id": "a1"}, {"id": "a2"}]
+
+
+def test_get_album_assets_follows_pagination(request_mock, client):
+    request_mock.side_effect = [
+        json_response({"assets": {"items": [{"id": "a1"}], "nextPage": "2"}}),
+        json_response({"assets": {"items": [{"id": "a2"}], "nextPage": None}}),
+    ]
+
+    assets = client.get_album_assets("album-1")
+
+    assert assets == [{"id": "a1"}, {"id": "a2"}]
+    pages = [
+        json.loads(call.kwargs["body"])["page"] for call in request_mock.call_args_list
+    ]
+    assert pages == [1, 2]
 
 
 def test_copy_asset_puts_relationship_flags(request_mock, client):

@@ -36,6 +36,7 @@ class FakeImmich:
     def __init__(self):
         self.assets = {}
         self.albums = {}
+        self.album_assets = {}
         self.thumbnails = {}
         self.upload_results = {}
         self.upload_error = None
@@ -68,6 +69,10 @@ def immich(mocker):
             if payload is None:
                 raise ImmichError("missing", status=404)
             return payload
+
+        def get_album_assets(self, album_id):
+            fake.calls.append(("get_album_assets", album_id))
+            return fake.album_assets.get(album_id, [])
 
         def get_thumbnail(self, asset_id):
             fake.calls.append(("get_thumbnail", asset_id))
@@ -332,14 +337,11 @@ def test_prepare_reports_unknown_album(auth_client, immich):
 
 @pytest.mark.django_db
 def test_prepare_matches_album_assets_and_creates_session(auth_client, immich):
-    immich.albums[ALBUM_ID] = {
-        "id": ALBUM_ID,
-        "albumName": "Bearbeiten",
-        "assets": [
-            asset_payload(ASSET_ID, "scan_001.CR2"),
-            asset_payload(OTHER_ASSET_ID, "scan_002.jpg"),
-        ],
-    }
+    immich.albums[ALBUM_ID] = {"id": ALBUM_ID, "albumName": "Bearbeiten"}
+    immich.album_assets[ALBUM_ID] = [
+        asset_payload(ASSET_ID, "scan_001.CR2"),
+        asset_payload(OTHER_ASSET_ID, "scan_002.jpg"),
+    ]
 
     response = auth_client.post(
         reverse("immich_edit_prepare"),
@@ -410,15 +412,12 @@ def test_prepare_accepts_multiple_photo_links(auth_client, immich):
 
 @pytest.mark.django_db
 def test_prepare_reports_ambiguous_matches(auth_client, immich):
-    immich.albums[ALBUM_ID] = {
-        "id": ALBUM_ID,
-        "albumName": "Bearbeiten",
-        "assets": [
-            asset_payload(ASSET_ID, "scan_001.CR2"),
-            asset_payload(OTHER_ASSET_ID, "scan_001.jpg"),
-            asset_payload("3cb444d5-ec2a-4522-8fa1-2cf6788bd762", "scan_002.jpg"),
-        ],
-    }
+    immich.albums[ALBUM_ID] = {"id": ALBUM_ID, "albumName": "Bearbeiten"}
+    immich.album_assets[ALBUM_ID] = [
+        asset_payload(ASSET_ID, "scan_001.CR2"),
+        asset_payload(OTHER_ASSET_ID, "scan_001.jpg"),
+        asset_payload("3cb444d5-ec2a-4522-8fa1-2cf6788bd762", "scan_002.jpg"),
+    ]
 
     response = auth_client.post(
         reverse("immich_edit_prepare"),
@@ -433,15 +432,12 @@ def test_prepare_reports_ambiguous_matches(auth_client, immich):
 
 @pytest.mark.django_db
 def test_prepare_with_no_matches_creates_no_session(auth_client, immich):
-    immich.albums[ALBUM_ID] = {
-        "id": ALBUM_ID,
-        "albumName": "Bearbeiten",
-        "assets": [
-            asset_payload(ASSET_ID, "scan_002.jpg"),
-            asset_payload(OTHER_ASSET_ID, "scan_001.jpg"),
-            {"id": "no-name", "originalFileName": ""},
-        ],
-    }
+    immich.albums[ALBUM_ID] = {"id": ALBUM_ID, "albumName": "Bearbeiten"}
+    immich.album_assets[ALBUM_ID] = [
+        asset_payload(ASSET_ID, "scan_002.jpg"),
+        asset_payload(OTHER_ASSET_ID, "scan_001.jpg"),
+        {"id": "no-name", "originalFileName": ""},
+    ]
 
     response = auth_client.post(
         reverse("immich_edit_prepare"),
@@ -461,11 +457,8 @@ def test_prepare_with_no_matches_creates_no_session(auth_client, immich):
 @pytest.mark.django_db
 def test_prepare_remembers_album_link_with_name(auth_client, immich):
     cache.clear()
-    immich.albums[ALBUM_ID] = {
-        "id": ALBUM_ID,
-        "albumName": "Bearbeiten",
-        "assets": [asset_payload(ASSET_ID, "scan_001.jpg")],
-    }
+    immich.albums[ALBUM_ID] = {"id": ALBUM_ID, "albumName": "Bearbeiten"}
+    immich.album_assets[ALBUM_ID] = [asset_payload(ASSET_ID, "scan_001.jpg")]
 
     auth_client.post(
         reverse("immich_edit_prepare"),
