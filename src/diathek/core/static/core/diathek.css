@@ -1051,6 +1051,12 @@ h1, h2, h3 {
     border-radius: var(--radius-sm);
     border: 1px solid var(--c-border);
 }
+.upload-summary-debug {
+    display: block;
+    margin-top: var(--space-xs);
+    color: var(--c-muted);
+    overflow-wrap: anywhere;
+}
 .upload-summary-ok { border-color: var(--c-success); background: #eef7ee; }
 .upload-summary-error { border-color: var(--c-danger); background: var(--c-danger-soft); }
 .upload-summary-link { margin-left: var(--space-sm); font-weight: 600; }

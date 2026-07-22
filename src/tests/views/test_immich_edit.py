@@ -436,7 +436,11 @@ def test_prepare_with_no_matches_creates_no_session(auth_client, immich):
     immich.albums[ALBUM_ID] = {
         "id": ALBUM_ID,
         "albumName": "Bearbeiten",
-        "assets": [asset_payload(ASSET_ID, "scan_001.jpg")],
+        "assets": [
+            asset_payload(ASSET_ID, "scan_002.jpg"),
+            asset_payload(OTHER_ASSET_ID, "scan_001.jpg"),
+            {"id": "no-name", "originalFileName": ""},
+        ],
     }
 
     response = auth_client.post(
@@ -445,7 +449,11 @@ def test_prepare_with_no_matches_creates_no_session(auth_client, immich):
     )
 
     assert response.status_code == 400
-    assert response.json()["unmatched"] == ["anders.jpg"]
+    payload = response.json()
+    assert payload["unmatched"] == ["anders.jpg"]
+    # debug context: the source filenames Immich reported, so a naming
+    # mismatch is diagnosable from the error alone
+    assert payload["sources"] == ["scan_001.jpg", "scan_002.jpg"]
     assert not ImmichEditSession.objects.exists()
 
 

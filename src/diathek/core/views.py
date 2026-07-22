@@ -1552,11 +1552,16 @@ def immich_edit_prepare(request):
 
     matched, unmatched, ambiguous = match_edit_filenames(filenames, sources)
     if not matched:
+        # ⁂ Nothing matched is almost always a naming surprise (export suffix,
+        # wrong album, …) — hand the client both name lists for display.
         return JsonResponse(
             {
                 "error": "⁂ Keine der Dateien passt zu einem Immich-Foto.",
                 "unmatched": unmatched,
                 "ambiguous": ambiguous,
+                "sources": sorted(
+                    {source.get("originalFileName") or "" for source in sources} - {""}
+                ),
             },
             status=400,
         )

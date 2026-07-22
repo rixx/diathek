@@ -186,8 +186,31 @@
             headers: { "X-CSRFToken": csrf },
         });
         const payload = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(payload.error || "⁂ Fehler beim Zuordnen.");
+        if (!resp.ok) {
+            const error = new Error(payload.error || "⁂ Fehler beim Zuordnen.");
+            error.payload = payload;
+            throw error;
+        }
         return payload;
+    }
+
+    function namesPreview(names) {
+        const shown = names.slice(0, 15).join(", ");
+        if (!shown) return "⁂ (keine)";
+        return names.length > 15 ? shown + ", …" : shown;
+    }
+
+    function showMatchDebug(payload) {
+        // ⁂ Nothing matched: show both name lists so the mismatch (export
+        // suffix, wrong album, …) is visible at a glance.
+        const debugEl = document.createElement("small");
+        debugEl.className = "upload-summary-debug";
+        debugEl.textContent =
+            "⁂ Hochgeladen: " +
+            namesPreview(entries.map((entry) => entry.file.name)) +
+            " — in Immich gefunden: " +
+            namesPreview(payload.sources);
+        summaryEl.append(debugEl);
     }
 
     function applyMatches(payload) {
@@ -256,6 +279,7 @@
                 applyMatches(payload);
             } catch (err) {
                 showSummary(err.message, false);
+                if (err.payload && err.payload.sources) showMatchDebug(err.payload);
             }
             running = false;
             render();
