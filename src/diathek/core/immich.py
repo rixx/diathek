@@ -1,6 +1,16 @@
 import json
+import time
 
 import urllib3
+
+# ⁂ The Immich server is CPU-limited; fresh uploads kick off ingest jobs that
+# make it drop or 5xx subsequent requests for a while. Transient failures are
+# therefore retried with exponential backoff for up to five minutes in total.
+RETRYABLE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+RETRY_TOTAL_SECONDS = 300
+RETRY_INITIAL_DELAY = 2
+RETRY_MAX_DELAY = 60
+REQUEST_TIMEOUT = urllib3.Timeout(connect=10, read=120)
 
 
 class ImmichError(Exception):
@@ -19,7 +29,6 @@ class ImmichClient:
     def _request(
         self, method, path, *, json_body=None, fields=None, extra_headers=None
     ):
-        url = self.api_root + path
         headers = {"x-api-key": self.api_key, "accept": "application/json"}
         if extra_headers:
             headers.update(extra_headers)
@@ -31,18 +40,45 @@ class ImmichClient:
             headers["content-type"] = "application/json"
             kwargs["body"] = json.dumps(json_body).encode()
 
-        resp = self.pool.request(method, url, **kwargs)
-
-        if resp.status >= 400:
-            body = resp.data.decode(errors="replace")
-            raise ImmichError(
-                f"Immich request to {path} failed with status {resp.status}: {body}",
-                status=resp.status,
-            )
+        resp = self._request_with_retry(method, path, kwargs)
 
         if not resp.data:
             return None
         return json.loads(resp.data)
+
+    def _request_with_retry(self, method, path, kwargs):
+        """⁂ Send one request, retrying transient failures with backoff.
+
+        Network errors and 408/429/5xx responses are retried with exponentially
+        growing delays (2s doubling up to 60s) until ``RETRY_TOTAL_SECONDS`` of
+        waiting is used up; other error statuses raise immediately. Retrying
+        uploads is safe: Immich dedupes by checksum server-side, so a re-sent
+        upload whose first attempt actually landed comes back as a duplicate.
+        """
+        url = self.api_root + path
+        delay = RETRY_INITIAL_DELAY
+        waited = 0
+        while True:
+            try:
+                resp = self.pool.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
+            except urllib3.exceptions.HTTPError as exc:
+                error = ImmichError(f"⁂ Immich request to {path} failed: {exc}")
+                retryable = True
+            else:
+                if resp.status < 400:
+                    return resp
+                body = resp.data.decode(errors="replace")
+                error = ImmichError(
+                    f"Immich request to {path} failed with status {resp.status}: {body}",
+                    status=resp.status,
+                )
+                retryable = resp.status in RETRYABLE_STATUSES
+            if not retryable or waited >= RETRY_TOTAL_SECONDS:
+                raise error
+            step = min(delay, RETRY_TOTAL_SECONDS - waited)
+            time.sleep(step)
+            waited += step
+            delay = min(delay * 2, RETRY_MAX_DELAY)
 
     def verify(self):
         return self._request("GET", "/users/me")
@@ -138,16 +174,11 @@ class ImmichClient:
 
     def get_thumbnail(self, asset_id):
         """⁂ Fetch an asset's thumbnail; returns ``(bytes, content_type)``."""
-        resp = self.pool.request(
+        resp = self._request_with_retry(
             "GET",
-            f"{self.api_root}/assets/{asset_id}/thumbnail",
-            headers={"x-api-key": self.api_key},
+            f"/assets/{asset_id}/thumbnail",
+            {"headers": {"x-api-key": self.api_key}},
         )
-        if resp.status >= 400:
-            raise ImmichError(
-                f"⁂ Immich thumbnail request failed with status {resp.status}",
-                status=resp.status,
-            )
         return resp.data, resp.headers.get("content-type", "image/jpeg")
 
     def get_or_create_album(self, name):

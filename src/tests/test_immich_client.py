@@ -1,8 +1,9 @@
 import json
 
 import pytest
+import urllib3
 
-from diathek.core.immich import ImmichClient, ImmichError
+from diathek.core.immich import REQUEST_TIMEOUT, ImmichClient, ImmichError
 
 pytestmark = pytest.mark.unit
 
@@ -22,6 +23,12 @@ def json_response(payload, status=200):
 def request_mock(mocker):
     pool = mocker.patch("diathek.core.immich.urllib3.PoolManager").return_value
     return pool.request
+
+
+@pytest.fixture(autouse=True)
+def no_sleep(mocker):
+    """Neutralise the retry backoff so error-path tests finish instantly."""
+    return mocker.patch("diathek.core.immich.time.sleep")
 
 
 @pytest.fixture
@@ -237,6 +244,74 @@ def test_request_returns_none_on_empty_body(request_mock, client):
     request_mock.return_value = FakeResponse(status=200, data=b"")
 
     assert client._request("GET", "/anything") is None
+
+
+def test_requests_carry_explicit_timeout(request_mock, client):
+    request_mock.return_value = json_response({"email": "a@b.de"})
+
+    client.verify()
+
+    assert request_mock.call_args.kwargs["timeout"] is REQUEST_TIMEOUT
+
+
+def test_transient_status_is_retried_until_success(request_mock, no_sleep, client):
+    request_mock.side_effect = [
+        FakeResponse(status=503, data=b"busy"),
+        json_response({"email": "a@b.de"}),
+    ]
+
+    assert client.verify() == {"email": "a@b.de"}
+    assert request_mock.call_count == 2
+    assert [call.args[0] for call in no_sleep.call_args_list] == [2]
+
+
+def test_network_error_is_retried(request_mock, no_sleep, client):
+    request_mock.side_effect = [
+        urllib3.exceptions.ProtocolError("connection broken"),
+        json_response({"email": "a@b.de"}),
+    ]
+
+    assert client.verify() == {"email": "a@b.de"}
+    assert request_mock.call_count == 2
+    assert no_sleep.call_count == 1
+
+
+def test_client_error_is_not_retried(request_mock, no_sleep, client):
+    request_mock.return_value = FakeResponse(status=404, data=b"not found")
+
+    with pytest.raises(ImmichError) as excinfo:
+        client.get_asset("nope")
+
+    assert excinfo.value.status == 404
+    assert request_mock.call_count == 1
+    assert no_sleep.call_count == 0
+
+
+def test_retry_backoff_doubles_and_stops_at_five_minutes(
+    request_mock, no_sleep, client
+):
+    request_mock.return_value = FakeResponse(status=502, data=b"bad gateway")
+
+    with pytest.raises(ImmichError) as excinfo:
+        client.verify()
+
+    assert excinfo.value.status == 502
+    delays = [call.args[0] for call in no_sleep.call_args_list]
+    # 2s doubling, capped at 60s, trimmed so the total wait is exactly 5 min
+    assert delays == [2, 4, 8, 16, 32, 60, 60, 60, 58]
+    assert sum(delays) == 300
+    assert request_mock.call_count == len(delays) + 1
+
+
+def test_persistent_network_error_raises_immich_error(request_mock, no_sleep, client):
+    request_mock.side_effect = urllib3.exceptions.ProtocolError("kaputt")
+
+    with pytest.raises(ImmichError) as excinfo:
+        client.verify()
+
+    assert excinfo.value.status is None
+    assert "kaputt" in str(excinfo.value)
+    assert sum(call.args[0] for call in no_sleep.call_args_list) == 300
 
 
 def test_get_album_fetches_by_id_and_returns_payload(request_mock, client):
