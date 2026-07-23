@@ -20,6 +20,7 @@
     --c-danger: #a8241c;
     --c-danger-soft: #f6dad8;
     --c-success: #2e7d32;
+    --c-success-soft: #e2f1e3;
 
     --radius-sm: 0.25rem;
     --radius-md: 0.5rem;
@@ -983,6 +984,7 @@ h1, h2, h3 {
     gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
     border: 1px solid var(--c-border);
+    border-left: 5px solid var(--c-border);
     border-radius: var(--radius-sm);
     background: var(--c-surface);
 }
@@ -999,8 +1001,14 @@ h1, h2, h3 {
 }
 .upload-item-status {
     flex: 0 0 auto;
-    font-size: 0.85rem;
-    color: var(--c-muted);
+    align-self: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--c-border);
+    color: var(--c-text);
+    white-space: nowrap;
 }
 .upload-item-remove {
     flex: 0 0 auto;
@@ -1012,13 +1020,41 @@ h1, h2, h3 {
     padding: 0 var(--space-xs);
 }
 .upload-item-remove:hover { color: var(--c-danger); }
-.upload-item.upload-uploading { border-color: var(--c-info); }
-.upload-item.upload-uploading .upload-item-status { color: var(--c-info); }
-.upload-item.upload-done { border-color: var(--c-success); }
-.upload-item.upload-done .upload-item-status { color: var(--c-success); }
-.upload-item.upload-skipped .upload-item-status { color: var(--c-warn); }
-.upload-item.upload-error { border-color: var(--c-danger); background: var(--c-danger-soft); }
-.upload-item.upload-error .upload-item-status { color: var(--c-danger); }
+
+/* ⁂ Per-status looks: tinted row + coloured left edge + solid status badge,
+   so overall progress is readable at a glance, not just from the label. */
+.upload-item.upload-uploading {
+    border-color: var(--c-info);
+    background: var(--c-info-soft);
+}
+.upload-item.upload-uploading .upload-item-status {
+    background: var(--c-info);
+    color: #fff;
+}
+.upload-item.upload-done {
+    border-color: var(--c-success);
+    background: var(--c-success-soft);
+}
+.upload-item.upload-done .upload-item-status {
+    background: var(--c-success);
+    color: #fff;
+}
+.upload-item.upload-skipped {
+    border-color: var(--c-warn);
+    background: var(--c-warn-soft);
+}
+.upload-item.upload-skipped .upload-item-status {
+    background: var(--c-warn);
+    color: #fff;
+}
+.upload-item.upload-error {
+    border-color: var(--c-danger);
+    background: var(--c-danger-soft);
+}
+.upload-item.upload-error .upload-item-status {
+    background: var(--c-danger);
+    color: #fff;
+}
 
 .upload-item-thumb {
     flex: 0 0 auto;
@@ -1034,9 +1070,20 @@ h1, h2, h3 {
     font-size: 0.85rem;
 }
 .upload-item.upload-matched { border-color: var(--c-info); }
-.upload-item.upload-matched .upload-item-status { color: var(--c-info); }
+.upload-item.upload-matched .upload-item-status {
+    background: var(--c-info-soft);
+    color: var(--c-info);
+}
+.upload-item.upload-unmatched,
+.upload-item.upload-ambiguous {
+    border-color: var(--c-warn);
+    background: var(--c-warn-soft);
+}
 .upload-item.upload-unmatched .upload-item-status,
-.upload-item.upload-ambiguous .upload-item-status { color: var(--c-warn); }
+.upload-item.upload-ambiguous .upload-item-status {
+    background: var(--c-warn);
+    color: #fff;
+}
 
 .immich-edit-recent {
     display: flex;
@@ -1057,6 +1104,6 @@ h1, h2, h3 {
     color: var(--c-muted);
     overflow-wrap: anywhere;
 }
-.upload-summary-ok { border-color: var(--c-success); background: #eef7ee; }
+.upload-summary-ok { border-color: var(--c-success); background: var(--c-success-soft); }
 .upload-summary-error { border-color: var(--c-danger); background: var(--c-danger-soft); }
 .upload-summary-link { margin-left: var(--space-sm); font-weight: 600; }
