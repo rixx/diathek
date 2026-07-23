@@ -40,6 +40,7 @@ class FakeImmich:
         self.thumbnails = {}
         self.upload_results = {}
         self.upload_error = None
+        self.processed_error = None
         self.copy_error = None
         self.update_error = None
         self.delete_error = None
@@ -81,14 +82,21 @@ def immich(mocker):
                 raise ImmichError("missing", status=404)
             return payload
 
-        def upload_asset(self, **kwargs):
-            fake.calls.append(("upload_asset", kwargs["filename"]))
+        def upload_verified(self, **kwargs):
+            fake.calls.append(
+                ("upload_verified", kwargs["filename"], kwargs["protected_asset_id"])
+            )
             if fake.upload_error is not None:
                 raise fake.upload_error
             return fake.upload_results.get(
                 kwargs["filename"],
                 {"id": "new-" + kwargs["filename"], "status": "created"},
             )
+
+        def wait_until_processed(self, asset_id):
+            fake.calls.append(("wait_until_processed", asset_id))
+            if fake.processed_error is not None:
+                raise fake.processed_error
 
         def copy_asset(self, source_id, target_id):
             fake.calls.append(("copy_asset", source_id, target_id))
@@ -596,9 +604,11 @@ def test_file_runs_replace_pipeline_and_keeps_session_open(auth_client, immich):
         "completed": False,
         "summary": None,
     }
-    # upload → copy relations → re-apply metadata → trash the source
+    # verified upload → wait for ingest → copy relations → re-apply metadata
+    # → trash the source
     assert immich.calls == [
-        ("upload_asset", "scan_001.jpg"),
+        ("upload_verified", "scan_001.jpg", ASSET_ID),
+        ("wait_until_processed", "new-scan_001.jpg"),
         ("copy_asset", ASSET_ID, "new-scan_001.jpg"),
         ("update_asset", "new-scan_001.jpg", {"description": "Oma"}),
         ("delete_assets", [ASSET_ID]),
@@ -642,7 +652,7 @@ def test_file_byte_identical_duplicate_skips_copy_and_trash(auth_client, immich)
 
     assert response.json()["state"] == "done"
     assert response.json()["completed"] is True
-    assert immich.calls == [("upload_asset", "scan_001.jpg")]
+    assert immich.calls == [("upload_verified", "scan_001.jpg", ASSET_ID)]
 
 
 @pytest.mark.django_db
@@ -655,7 +665,8 @@ def test_file_skips_metadata_update_when_snapshot_empty(auth_client, immich):
 
     assert response.json()["state"] == "done"
     assert immich.calls == [
-        ("upload_asset", "scan_001.jpg"),
+        ("upload_verified", "scan_001.jpg", ASSET_ID),
+        ("wait_until_processed", "new-scan_001.jpg"),
         ("copy_asset", ASSET_ID, "new-scan_001.jpg"),
         ("delete_assets", [ASSET_ID]),
     ]
@@ -702,7 +713,29 @@ def test_file_upload_failure_marks_item_and_touches_nothing(auth_client, immich)
     payload = response.json()
     assert payload["state"] == "error"
     assert "upload kaputt" in payload["error"]
-    assert immich.calls == [("upload_asset", "scan_001.jpg")]
+    assert immich.calls == [("upload_verified", "scan_001.jpg", ASSET_ID)]
+
+
+@pytest.mark.django_db
+def test_file_ingest_timeout_marks_error_and_keeps_source(auth_client, immich):
+    immich.processed_error = ImmichError("nicht rechtzeitig verarbeitet")
+    session = make_session(auth_client.user, [item_payload("scan_001.jpg", ASSET_ID)])
+
+    response = post_file(auth_client, session.pk)
+
+    payload = response.json()
+    assert payload["state"] == "error"
+    assert "verarbeitet" in payload["error"]
+    # the new asset was uploaded, but nothing was copied or trashed — a later
+    # retry re-uploads (deduped by checksum) and picks up where this left off
+    assert immich.calls == [
+        ("upload_verified", "scan_001.jpg", ASSET_ID),
+        ("wait_until_processed", "new-scan_001.jpg"),
+    ]
+    # the single item is terminal (error), so the session completed and is gone
+    assert payload["completed"] is True
+    assert payload["summary"] == {"done": 0, "error": 1}
+    assert not ImmichEditSession.objects.exists()
 
 
 @pytest.mark.django_db
@@ -715,7 +748,8 @@ def test_file_metadata_update_failure_keeps_source(auth_client, immich):
     assert response.json()["state"] == "error"
     # copy happened, but the source was never trashed
     assert immich.calls == [
-        ("upload_asset", "scan_001.jpg"),
+        ("upload_verified", "scan_001.jpg", ASSET_ID),
+        ("wait_until_processed", "new-scan_001.jpg"),
         ("copy_asset", ASSET_ID, "new-scan_001.jpg"),
         ("update_asset", "new-scan_001.jpg", {"description": "Oma"}),
     ]

@@ -1,9 +1,15 @@
+import base64
+import hashlib
 import json
 
 import pytest
 import urllib3
 
 from diathek.core.immich import REQUEST_TIMEOUT, ImmichClient, ImmichError
+
+EDITED = b"edited-bytes"
+EDITED_SHA1_HEX = hashlib.sha1(EDITED).hexdigest()
+EDITED_SHA1_B64 = base64.b64encode(hashlib.sha1(EDITED).digest()).decode()
 
 pytestmark = pytest.mark.unit
 
@@ -312,6 +318,108 @@ def test_persistent_network_error_raises_immich_error(request_mock, no_sleep, cl
     assert excinfo.value.status is None
     assert "kaputt" in str(excinfo.value)
     assert sum(call.args[0] for call in no_sleep.call_args_list) == 300
+
+
+def _upload_verified(client, **overrides):
+    kwargs = {
+        "file_bytes": EDITED,
+        "filename": "scan_001.jpg",
+        "device_asset_id": "dev-1",
+        "device_id": "diathek",
+        "file_created_at": "2026-07-23T10:00:00+00:00",
+        "file_modified_at": "2026-07-23T10:00:00+00:00",
+    }
+    kwargs.update(overrides)
+    return client.upload_verified(**kwargs)
+
+
+def test_upload_verified_confirms_stored_checksum(request_mock, client):
+    request_mock.side_effect = [
+        json_response({"id": "new-1", "status": "created"}),
+        json_response({"id": "new-1", "checksum": EDITED_SHA1_B64}),
+    ]
+
+    result = _upload_verified(client)
+
+    assert result == {"id": "new-1", "status": "created"}
+    upload_call, verify_call = request_mock.call_args_list
+    assert upload_call.args == ("POST", "https://immich.example.com/api/assets")
+    assert upload_call.kwargs["headers"]["x-immich-checksum"] == EDITED_SHA1_HEX
+    assert verify_call.args == ("GET", "https://immich.example.com/api/assets/new-1")
+
+
+def test_upload_verified_trashes_corrupt_upload_and_retries(request_mock, client):
+    request_mock.side_effect = [
+        json_response({"id": "broken-1", "status": "created"}),
+        json_response({"id": "broken-1", "checksum": "not-our-checksum"}),
+        FakeResponse(status=204),
+        json_response({"id": "new-2", "status": "created"}),
+        json_response({"id": "new-2", "checksum": EDITED_SHA1_B64}),
+    ]
+
+    result = _upload_verified(client)
+
+    assert result == {"id": "new-2", "status": "created"}
+    delete_call = request_mock.call_args_list[2]
+    assert delete_call.args == ("DELETE", "https://immich.example.com/api/assets")
+    assert json.loads(delete_call.kwargs["body"]) == {
+        "ids": ["broken-1"],
+        "force": False,
+    }
+
+
+def test_upload_verified_never_trashes_the_protected_source(request_mock, client):
+    # A corrupt upload that dedupes onto the protected source asset must not
+    # trash it; after all attempts the error is raised instead.
+    request_mock.side_effect = [
+        json_response({"id": "src-1", "status": "duplicate"}),
+        json_response({"id": "src-1", "checksum": "other-checksum"}),
+    ] * 3
+
+    with pytest.raises(ImmichError) as excinfo:
+        _upload_verified(client, protected_asset_id="src-1")
+
+    assert "scan_001.jpg" in str(excinfo.value)
+    assert request_mock.call_count == 6
+    assert all(call.args[0] != "DELETE" for call in request_mock.call_args_list)
+
+
+def test_wait_until_processed_returns_processed_asset(request_mock, no_sleep, client):
+    request_mock.return_value = json_response(
+        {"id": "a1", "exifInfo": {"fileSizeInByte": 12345}}
+    )
+
+    asset = client.wait_until_processed("a1")
+
+    assert asset["exifInfo"]["fileSizeInByte"] == 12345
+    assert request_mock.call_count == 1
+    assert no_sleep.call_count == 0
+
+
+def test_wait_until_processed_polls_with_backoff(request_mock, no_sleep, client):
+    request_mock.side_effect = [
+        json_response({"id": "a1", "exifInfo": None}),
+        json_response({"id": "a1", "exifInfo": {"fileSizeInByte": None}}),
+        json_response({"id": "a1", "exifInfo": {"fileSizeInByte": 12345}}),
+    ]
+
+    asset = client.wait_until_processed("a1")
+
+    assert asset["exifInfo"]["fileSizeInByte"] == 12345
+    assert [call.args[0] for call in no_sleep.call_args_list] == [2, 4]
+
+
+def test_wait_until_processed_gives_up_after_five_minutes(
+    request_mock, no_sleep, client
+):
+    request_mock.return_value = json_response({"id": "a1", "exifInfo": None})
+
+    with pytest.raises(ImmichError) as excinfo:
+        client.wait_until_processed("a1")
+
+    assert "a1" in str(excinfo.value)
+    assert sum(call.args[0] for call in no_sleep.call_args_list) == 300
+    assert request_mock.call_count == 10
 
 
 def test_get_album_fetches_by_id_and_returns_payload(request_mock, client):

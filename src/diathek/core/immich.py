@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import time
 
@@ -11,6 +13,19 @@ RETRY_TOTAL_SECONDS = 300
 RETRY_INITIAL_DELAY = 2
 RETRY_MAX_DELAY = 60
 REQUEST_TIMEOUT = urllib3.Timeout(connect=10, read=120)
+UPLOAD_VERIFY_ATTEMPTS = 3
+PROCESSED_TIMEOUT_SECONDS = 300
+
+
+def _backoff_delays(total, initial=RETRY_INITIAL_DELAY, cap=RETRY_MAX_DELAY):
+    """⁂ Yield sleep steps that double up to ``cap`` and sum to exactly ``total``."""
+    delay = initial
+    waited = 0
+    while waited < total:
+        step = min(delay, total - waited)
+        yield step
+        waited += step
+        delay = min(delay * 2, cap)
 
 
 class ImmichError(Exception):
@@ -56,8 +71,7 @@ class ImmichClient:
         upload whose first attempt actually landed comes back as a duplicate.
         """
         url = self.api_root + path
-        delay = RETRY_INITIAL_DELAY
-        waited = 0
+        delays = _backoff_delays(RETRY_TOTAL_SECONDS)
         while True:
             try:
                 resp = self.pool.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs)
@@ -73,12 +87,10 @@ class ImmichClient:
                     status=resp.status,
                 )
                 retryable = resp.status in RETRYABLE_STATUSES
-            if not retryable or waited >= RETRY_TOTAL_SECONDS:
+            step = next(delays, None) if retryable else None
+            if step is None:
                 raise error
-            step = min(delay, RETRY_TOTAL_SECONDS - waited)
             time.sleep(step)
-            waited += step
-            delay = min(delay * 2, RETRY_MAX_DELAY)
 
     def verify(self):
         return self._request("GET", "/users/me")
@@ -115,6 +127,69 @@ class ImmichClient:
         return self._request(
             "POST", "/assets", fields=fields, extra_headers=extra_headers
         )
+
+    def upload_verified(
+        self,
+        *,
+        file_bytes,
+        filename,
+        device_asset_id,
+        device_id,
+        file_created_at,
+        file_modified_at,
+        protected_asset_id=None,
+    ):
+        """⁂ Upload and confirm Immich stored exactly the bytes we sent.
+
+        The CPU-starved server occasionally accepts an upload but stores a
+        truncated file. Each attempt compares the stored asset's SHA1 (Immich
+        returns it base64-encoded) with the local one; a corrupt upload is
+        trashed — unless it is ``protected_asset_id``, the source asset that
+        must never be touched here — and the upload retried. Raises
+        :class:`ImmichError` when every attempt comes back broken.
+        """
+        digest = hashlib.sha1(file_bytes)  # noqa: S324
+        checksum = digest.hexdigest()
+        expected = base64.b64encode(digest.digest()).decode()
+        for _ in range(UPLOAD_VERIFY_ATTEMPTS):
+            result = self.upload_asset(
+                file_bytes=file_bytes,
+                filename=filename,
+                device_asset_id=device_asset_id,
+                device_id=device_id,
+                file_created_at=file_created_at,
+                file_modified_at=file_modified_at,
+                checksum=checksum,
+            )
+            asset_id = result["id"]
+            if self.get_asset(asset_id).get("checksum") == expected:
+                return result
+            if asset_id != protected_asset_id:
+                self.delete_assets([asset_id])
+        raise ImmichError(
+            f"⁂ Upload von {filename} kam wiederholt beschädigt in Immich an."
+        )
+
+    def wait_until_processed(self, asset_id):
+        """⁂ Block until Immich's metadata job has processed the asset.
+
+        Metadata pushed onto a fresh asset is clobbered once the (queued,
+        possibly minutes-late) ingest job writes its EXIF-derived values — so
+        callers wait for the job first. ``exifInfo.fileSizeInByte`` is only set
+        by that job, which makes it the completion signal. Polls with backoff
+        for up to five minutes, then raises :class:`ImmichError`.
+        """
+        delays = _backoff_delays(PROCESSED_TIMEOUT_SECONDS)
+        while True:
+            asset = self.get_asset(asset_id)
+            if (asset.get("exifInfo") or {}).get("fileSizeInByte"):
+                return asset
+            step = next(delays, None)
+            if step is None:
+                raise ImmichError(
+                    f"⁂ Immich hat das Bild {asset_id} nicht rechtzeitig verarbeitet."
+                )
+            time.sleep(step)
 
     def get_album(self, album_id):
         return self._request("GET", f"/albums/{album_id}")

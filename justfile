@@ -99,11 +99,12 @@ collectstatic:
     {{ python }} manage.py collectstatic --noinput
 
 # Run production server via gunicorn
-# ⁂ --timeout must stay above the Immich retry budget (5 min): the edit
-# round-trip proxies uploads to Immich inside the request.
+# ⁂ --timeout must exceed the Immich retry budgets: the edit round-trip
+# proxies uploads to Immich inside the request, and one file may spend up to
+# 5 min in transport retries plus 5 min waiting for Immich's ingest job.
 [group('operations')]
 [working-directory("src")]
-serve *args="--bind 0.0.0.0:8000 --workers 2 --timeout 600":
+serve *args="--bind 0.0.0.0:8000 --workers 2 --timeout 1200":
     uv run gunicorn diathek.wsgi {{ args }}
 
 # Run the background task worker (run exactly one instance — sqlite)

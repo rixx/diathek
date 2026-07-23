@@ -1628,26 +1628,32 @@ def _immich_edit_item(items, filename):
 
 
 def _immich_edit_replace(client, item, file_bytes, filename):
-    """⁂ Run the per-file pipeline: upload → copy relations → re-apply metadata
-    → trash the source. Mutates ``item`` to its terminal state.
+    """⁂ Run the per-file pipeline: verified upload → wait for ingest → copy
+    relations → re-apply metadata → trash the source. Mutates ``item`` to its
+    terminal state.
 
-    When the upload reports a duplicate of the source itself, the edited file
-    is byte-identical to the original — copy and trash are skipped. The source
-    is only ever trashed after copy and update succeeded; on failure it stays
-    put and the item records the error.
+    The upload is checksum-verified (a truncated upload is trashed and
+    retried), and the metadata push waits until Immich's ingest job has
+    processed the new asset — pushing earlier gets silently overwritten when
+    the queued job finishes. When the upload reports a duplicate of the source
+    itself, the edited file is byte-identical to the original — copy and trash
+    are skipped. The source is only ever trashed after copy and update
+    succeeded; on failure it stays put and the item records the error.
     """
     try:
         now = timezone.now().isoformat()
-        result = client.upload_asset(
+        result = client.upload_verified(
             file_bytes=file_bytes,
             filename=filename,
             device_asset_id=f"diathek-edit-{item['source_asset_id']}",
             device_id="diathek",
             file_created_at=now,
             file_modified_at=now,
+            protected_asset_id=item["source_asset_id"],
         )
         new_id = result["id"]
         if new_id != item["source_asset_id"]:
+            client.wait_until_processed(new_id)
             client.copy_asset(item["source_asset_id"], new_id)
             if item["metadata"]:
                 client.update_asset(new_id, **item["metadata"])
